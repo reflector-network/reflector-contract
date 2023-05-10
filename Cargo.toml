@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+
+members = ["shared", "price-oracle", "price-oracle-plus", "examples\\consumer-contract", "examples\\consumer-contract-no-import"]
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[workspace.dependencies.soroban-sdk]
+version = "0.7.0"
+
+[workspace.dependencies.soroban-auth]
+version = "0.7.0"
+
+[workspace.dependencies.hex]
+version = "0.4.3"
+
+[workspace.dependencies.stellar-strkey]
+version = "0.0.7"

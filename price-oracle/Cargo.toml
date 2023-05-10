@@ -1,0 +1,20 @@
+[package]
+name = "se-price-oracle"
+version = "0.3.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+soroban-auth = { workspace = true }
+shared = { path = "../shared" }
+
+[dev_dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[build-dependencies]
+soroban-sdk = { workspace = true }
+stellar-strkey = { workspace = true }
