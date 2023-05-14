@@ -107,12 +107,8 @@ impl PriceOracle {
         e.get_retention_period()
     }
 
-    pub fn assets(e: &Env) -> Option<Vec<Address>> {
-        let assets = e.get_assets();
-        if assets.len() == 0 {
-            return None;
-        }
-        Some(assets)
+    pub fn assets(e: &Env) -> Vec<Address> {
+        e.get_assets()
     }
 
     pub fn price(e: &Env, asset: Address, timestamp: u64) -> Option<PriceData> {

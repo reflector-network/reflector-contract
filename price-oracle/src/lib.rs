@@ -106,7 +106,7 @@ impl PriceOracleContract {
     /// # Returns
     /// 
     /// The assets supported by the contract or None if no assets are supported.
-    pub fn assets(e: Env) -> Option<Vec<Address>> {
+    pub fn assets(e: Env) -> Vec<Address> {
         PriceOracle::assets(&e)
     }
 

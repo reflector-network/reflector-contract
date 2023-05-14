@@ -187,7 +187,7 @@ fn init_test() {
     let decimals = client.decimals();
     assert_eq!(decimals, Constants::DECIMALS);
 
-    let assets = client.assets().unwrap();
+    let assets = client.assets();
     assert_eq!(assets, config_data.assets);
 
     let base_fee = client.base_fee().unwrap();

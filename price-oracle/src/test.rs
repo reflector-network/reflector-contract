@@ -120,7 +120,7 @@ fn init_test() {
     let decimals = client.decimals();
     assert_eq!(decimals, Constants::DECIMALS);
 
-    let assets = client.assets().unwrap();
+    let assets = client.assets();
     assert_eq!(assets, init_data.assets);
 }
 
