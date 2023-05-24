@@ -1,9 +1,8 @@
-## Oracle contract for Soroban
-
+# Reflector oracle smart contract
 
 ## Building the Contracts
 
-Our contract optimizes on calls and storage by using constants for values that will not change throughout the contract's lifetime, as well as for the default administrator. To build the contract with these values, you need to execute a script with parameters. 
+The contract optimizes on calls and storage by using constants for values that will not change throughout the contract's lifetime, as well as for the default administrator. To build the contract with these values, you need to execute a script with parameters. 
 
 ### Prerequisites
 
