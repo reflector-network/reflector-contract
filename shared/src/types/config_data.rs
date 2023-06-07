@@ -1,5 +1,7 @@
 use soroban_sdk::{contracttype, Address, Vec};
 
+use super::asset::Asset;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 
@@ -10,7 +12,7 @@ pub struct ConfigData {
     /// The retention period for the prices.
     pub period: u64,
     /// The assets supported by the contract.
-    pub assets: Vec<Address>,
+    pub assets: Vec<Asset>,
     /// The base fee.
     pub base_fee: i128
 }

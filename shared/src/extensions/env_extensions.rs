@@ -7,7 +7,7 @@ use crate::types;
 use constants::Constants;
 use extensions::i128_extensions::I128Extensions;
 use types::{
-    asset_price_key::AssetPriceKey, data_key::DataKey, error::Error, price_data::PriceData,
+    asset_price_key::AssetPriceKey, data_key::DataKey, error::Error, price_data::PriceData, asset::Asset,
 };
 
 pub trait EnvExtensions {
@@ -19,9 +19,9 @@ pub trait EnvExtensions {
 
     fn set_admin(&self, admin: &Address);
 
-    fn get_price(&self, asset: Address, timestamp: u64) -> Option<i128>;
+    fn get_price(&self, asset: Asset, timestamp: u64) -> Option<i128>;
 
-    fn set_price(&self, asset: Address, price: i128, timestamp: u64);
+    fn set_price(&self, asset: Asset, price: i128, timestamp: u64);
 
     fn get_last_timestamp(&self) -> Option<u64>;
 
@@ -31,23 +31,23 @@ pub trait EnvExtensions {
 
     fn set_retention_period(&self, period: u64);
 
-    fn get_assets(&self) -> Vec<Address>;
+    fn get_assets(&self) -> Vec<Asset>;
 
-    fn set_assets(&self, assets: Vec<Address>);
+    fn set_assets(&self, assets: Vec<Asset>);
 
-    fn get_prices(&self, asset: Address, records: u32) -> Option<Vec<PriceData>>;
+    fn get_prices(&self, asset: Asset, records: u32) -> Option<Vec<PriceData>>;
 
     fn get_x_price(
         &self,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         timestamp: u64,
     ) -> Option<i128>;
 
     fn get_x_prices(
         &self,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>>;
 
@@ -55,7 +55,7 @@ pub trait EnvExtensions {
 
     fn try_delete_data(&self, key: DataKey) -> bool;
 
-    fn try_delete_old_price(&self, asset: Address, timestamp: u64, period: u64) -> bool;
+    fn try_delete_old_price(&self, asset: Asset, timestamp: u64, period: u64) -> bool;
 
     fn panic_if_not_admin(&self, invoker: &Address);
 }
@@ -87,7 +87,7 @@ impl EnvExtensions for Env {
         self.storage().set(&DataKey::Admin, admin);
     }
 
-    fn get_price(&self, asset: Address, timestamp: u64) -> Option<i128> {
+    fn get_price(&self, asset: Asset, timestamp: u64) -> Option<i128> {
         //build the key for the price
         let data_key = DataKey::Price(AssetPriceKey { asset, timestamp });
 
@@ -100,7 +100,7 @@ impl EnvExtensions for Env {
         Some(self.storage().get_unchecked(&data_key).unwrap())
     }
 
-    fn set_price(&self, asset: Address, price: i128, timestamp: u64) {
+    fn set_price(&self, asset: Asset, price: i128, timestamp: u64) {
         //build the key for the price
         let data_key = DataKey::Price(AssetPriceKey {
             asset: asset.clone(),
@@ -144,7 +144,7 @@ impl EnvExtensions for Env {
         self.storage().set(&DataKey::RetentionPeriod, &rdm_period);
     }
 
-    fn get_assets(&self) -> Vec<Address> {
+    fn get_assets(&self) -> Vec<Asset> {
         if !self.storage().has(&DataKey::Assets) {
             //return empty vector
             return Vec::new(&self);
@@ -152,11 +152,11 @@ impl EnvExtensions for Env {
         self.storage().get_unchecked(&DataKey::Assets).unwrap()
     }
 
-    fn set_assets(&self, assets: Vec<Address>) {
+    fn set_assets(&self, assets: Vec<Asset>) {
         self.storage().set(&DataKey::Assets, &assets);
     }
 
-    fn get_prices(&self, asset: Address, records: u32) -> Option<Vec<PriceData>> {
+    fn get_prices(&self, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         prices(
             &self,
             |timestamp| self.get_price(asset.clone(), timestamp),
@@ -166,8 +166,8 @@ impl EnvExtensions for Env {
 
     fn get_x_price(
         &self,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         timestamp: u64,
     ) -> Option<i128> {
         get_x_price(&self, &base_asset, &quote_asset, timestamp)
@@ -175,8 +175,8 @@ impl EnvExtensions for Env {
 
     fn get_x_prices(
         &self,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
         prices(
@@ -206,7 +206,7 @@ impl EnvExtensions for Env {
         true
     }
 
-    fn try_delete_old_price(&self, asset: Address, timestamp: u64, period: u64) -> bool {
+    fn try_delete_old_price(&self, asset: Asset, timestamp: u64, period: u64) -> bool {
         if timestamp < period {
             return false;
         }
@@ -269,8 +269,8 @@ fn prices<F: Fn(u64) -> Option<i128>>(
 
 fn get_x_price(
     e: &Env,
-    base_asset: &Address,
-    quote_asset: &Address,
+    base_asset: &Asset,
+    quote_asset: &Asset,
     timestamp: u64,
 ) -> Option<i128> {
     //check if the asset are the same

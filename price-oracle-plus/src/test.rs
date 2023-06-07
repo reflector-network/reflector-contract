@@ -122,15 +122,19 @@ fn normalize_price(price: i128) -> i128 {
     price * 10i128.pow(Constants::DECIMALS)
 }
 
-fn generate_assets(e: &Env, count: usize) -> Vec<Address> {
+fn generate_assets(e: &Env, count: usize) -> Vec<Asset> {
     let mut assets = Vec::new(&e);
-    for _ in 0..count {
-        assets.push_back(Address::random(&e));
+    for i in 0..count {
+        if i % 2 == 0 {
+            assets.push_back(Asset::Stellar(Address::random(&e)));
+        } else {
+            assets.push_back(Asset::Generic(Symbol::new(e, &stringify!("ASSET_{}", i))));
+        }
     }
     assets
 }
 
-fn get_updates(env: &Env, assets: &Vec<Address>, price: i128) -> Vec<i128> {
+fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
     let mut updates = Vec::new(&env);
     for _ in assets.iter() {
         updates.push_back(price);
@@ -458,19 +462,19 @@ fn get_non_registered_asset_price_test() {
     let contract = deposit_random_contract(&env, &client, &config_data, &token, &1000);
 
     //try to get price for unknown asset
-    let mut result = env.as_contract(&contract, || {client.lastprice(&Address::random(&env)) });
+    let mut result = env.as_contract(&contract, || {client.lastprice(&Asset::Generic(Symbol::new(&env, stringify!("NonRegisteredAsset")))) });
     assert_eq!(result, None);
 
     //try to get price for unknown base asset
-    result = env.as_contract(&contract, || {client.x_last_price(&Address::random(&env), &config_data.assets.get_unchecked(1).unwrap()) });
+    result = env.as_contract(&contract, || {client.x_last_price(&Asset::Stellar(Address::random(&env)), &config_data.assets.get_unchecked(1).unwrap()) });
     assert_eq!(result, None);
 
     //try to get price for unknown quote asset
-    result = env.as_contract(&contract, || {client.x_last_price(&config_data.assets.get_unchecked(1).unwrap(), &Address::random(&env)) });
+    result = env.as_contract(&contract, || {client.x_last_price(&config_data.assets.get_unchecked(1).unwrap(), &Asset::Stellar(Address::random(&env))) });
     assert_eq!(result, None);
 
     //try to get price for both unknown assets
-    result = env.as_contract(&contract, || {client.x_last_price(&Address::random(&env), &Address::random(&env)) });
+    result = env.as_contract(&contract, || {client.x_last_price(&Asset::Stellar(Address::random(&env)), &Asset::Generic(Symbol::new(&env, stringify!("NonRegisteredAsset")))) });
     assert_eq!(result, None);
 }
 
@@ -485,7 +489,7 @@ fn get_asset_price_for_invalid_timestamp_test() {
     assert_eq!(result, None);
 
     //try to get price for unknown asset
-    result = env.as_contract(&contract, || {client.lastprice(&Address::random(&env)) });
+    result = env.as_contract(&contract, || {client.lastprice(&Asset::Stellar(Address::random(&env))) });
     assert_eq!(result, None);
 }
 
