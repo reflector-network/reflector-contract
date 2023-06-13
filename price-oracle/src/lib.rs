@@ -71,7 +71,7 @@ impl PriceOracleContract {
     /// # Returns
     /// 
     /// The base asset.
-    pub fn base(e: Env) -> Address {
+    pub fn base(e: Env) -> Asset {
         PriceOracle::base(&e)
     }
 

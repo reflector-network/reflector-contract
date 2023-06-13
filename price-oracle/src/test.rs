@@ -6,7 +6,7 @@ use super::*;
 use alloc::rc::Rc;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, xdr, Symbol};
 
-use shared::{constants::Constants, extensions::u64_extensions::U64Extensions, types::asset::Asset};
+use shared::{constants::Constants, extensions::{u64_extensions::U64Extensions, env_extensions::EnvExtensions}, types::asset::Asset};
 
 pub fn register_account(e: &Env, account: &[u8; 32]) {
     let account_id = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256(
@@ -101,10 +101,6 @@ fn get_updates(env: &Env, assets: Vec<Asset>, price: i128) -> Vec<i128> {
     updates
 }
 
-fn get_contract_address(e: &Env, bytes: [u8; 32]) -> Address {
-    Address::from_contract_id(e, &BytesN::from_array(e, &bytes))
-}
-
 #[test]
 fn init_test() {
     let (env, client, init_data) = init_contract_with_admin();
@@ -113,7 +109,7 @@ fn init_test() {
     assert_eq!(address, init_data.admin.clone());
 
     let base = client.base();
-    assert_eq!(base, get_contract_address(&env, Constants::BASE));
+    assert_eq!(base, env.get_base_asset());
 
     let resolution = client.resolution();
     assert_eq!(resolution, Constants::RESOLUTION / 1000);

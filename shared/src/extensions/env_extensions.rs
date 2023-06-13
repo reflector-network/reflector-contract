@@ -1,3 +1,4 @@
+use soroban_sdk::Symbol;
 use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec};
 
 use crate::constants;
@@ -7,7 +8,8 @@ use crate::types;
 use constants::Constants;
 use extensions::i128_extensions::I128Extensions;
 use types::{
-    asset_price_key::AssetPriceKey, data_key::DataKey, error::Error, price_data::PriceData, asset::Asset,
+    asset::Asset, asset_price_key::AssetPriceKey, asset_type::AssetType, data_key::DataKey,
+    error::Error, price_data::PriceData,
 };
 
 pub trait EnvExtensions {
@@ -37,12 +39,7 @@ pub trait EnvExtensions {
 
     fn get_prices(&self, asset: Asset, records: u32) -> Option<Vec<PriceData>>;
 
-    fn get_x_price(
-        &self,
-        base_asset: Asset,
-        quote_asset: Asset,
-        timestamp: u64,
-    ) -> Option<i128>;
+    fn get_x_price(&self, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<i128>;
 
     fn get_x_prices(
         &self,
@@ -58,6 +55,8 @@ pub trait EnvExtensions {
     fn try_delete_old_price(&self, asset: Asset, timestamp: u64, period: u64) -> bool;
 
     fn panic_if_not_admin(&self, invoker: &Address);
+
+    fn get_base_asset(&self) -> Asset;
 }
 
 impl EnvExtensions for Env {
@@ -164,12 +163,7 @@ impl EnvExtensions for Env {
         )
     }
 
-    fn get_x_price(
-        &self,
-        base_asset: Asset,
-        quote_asset: Asset,
-        timestamp: u64,
-    ) -> Option<i128> {
+    fn get_x_price(&self, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<i128> {
         get_x_price(&self, &base_asset, &quote_asset, timestamp)
     }
 
@@ -226,6 +220,23 @@ impl EnvExtensions for Env {
             panic_with_error!(self, Error::Unauthorized);
         }
     }
+
+    fn get_base_asset(&self) -> Asset {
+        match Constants::BASE_ASSET_TYPE {
+            AssetType::STELLAR => {
+                let asset_bytes = BytesN::from_array(self, &Constants::BASE);
+                return Asset::Stellar(Address::from_contract_id(self, &asset_bytes));
+            }
+            AssetType::GENERIC => {
+                //drop the trailing zeros
+                let first_zero_index = Constants::BASE.iter().position(|&b| b == 0).unwrap_or(Constants::BASE.len());
+                return Asset::Generic(Symbol::new(
+                    self,
+                    core::str::from_utf8(&Constants::BASE[..first_zero_index]).unwrap()
+                ));
+            }
+        }
+    }
 }
 
 fn prices<F: Fn(u64) -> Option<i128>>(
@@ -267,12 +278,7 @@ fn prices<F: Fn(u64) -> Option<i128>>(
     Some(prices)
 }
 
-fn get_x_price(
-    e: &Env,
-    base_asset: &Asset,
-    quote_asset: &Asset,
-    timestamp: u64,
-) -> Option<i128> {
+fn get_x_price(e: &Env, base_asset: &Asset, quote_asset: &Asset, timestamp: u64) -> Option<i128> {
     //check if the asset are the same
     if base_asset == quote_asset {
         return Some(10i128.pow(Constants::DECIMALS));

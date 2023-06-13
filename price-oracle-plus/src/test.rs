@@ -180,7 +180,7 @@ fn init_test() {
     assert_eq!(address, config_data.admin.clone());
 
     let base = client.base();
-    assert_eq!(base, get_contract_address(&env, Constants::BASE));
+    assert_eq!(base, env.get_base_asset());
 
     let resolution = client.resolution();
     assert_eq!(resolution, Constants::RESOLUTION / 1000);

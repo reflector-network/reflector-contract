@@ -1,8 +1,8 @@
-use soroban_sdk::{ Env, Address, panic_with_error, Vec, BytesN };
 use crate::constants::Constants;
-use crate::types::asset::Asset;
 use crate::extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
-use crate::types::{ config_data::ConfigData, error::Error, price_data::PriceData };
+use crate::types::asset::Asset;
+use crate::types::{config_data::ConfigData, error::Error, price_data::PriceData};
+use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
 pub struct PriceOracle;
 
@@ -90,9 +90,8 @@ impl PriceOracle {
         e.get_admin()
     }
 
-    pub fn base(e: &Env) -> Address {
-        let bytes = BytesN::from_array(&e, &Constants::BASE);
-        Address::from_contract_id(&e, &bytes)
+    pub fn base(e: &Env) -> Asset {
+        e.get_base_asset()
     }
 
     pub fn decimals(_e: &Env) -> u32 {
