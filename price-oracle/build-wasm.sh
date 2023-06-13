@@ -11,6 +11,10 @@ while [[ "$#" -gt 0 ]]; do
             ADMIN="$2"
             shift 2
             ;;
+        --base_asset_type)
+            BASE_ASSET_TYPE="$2"
+            shift 2
+            ;;
         --base)
             BASE="$2"
             shift 2
@@ -35,6 +39,11 @@ if [ -z "$ADMIN" ]; then
     exit 1
 fi
 
+if [ -z "$BASE_ASSET_TYPE" ]; then
+    echo "--base_asset_type argument is required."
+    exit 1
+fi
+
 if [ -z "$BASE" ]; then
     echo "--base argument is required."
     exit 1
@@ -50,11 +59,12 @@ if [ -z "$RESOLUTION" ]; then
     exit 1
 fi
 
+
 # touch lib.rs and constants.rs to force a rebuild
 touch ./src/lib.rs
 touch ../shared/src/constants.rs
 # build the contract with the provided arguments
-DECIMALS="$DECIMALS" RESOLUTION="$RESOLUTION" ADMIN="$ADMIN" BASE="$BASE" cargo build --release --target wasm32-unknown-unknown
+DECIMALS="$DECIMALS" RESOLUTION="$RESOLUTION" ADMIN="$ADMIN" BASE_ASSET_TYPE="$BASE_ASSET_TYPE" BASE="$BASE" cargo build --release --target wasm32-unknown-unknown
 
 # restore constants.rs
 # check if the backup file exists

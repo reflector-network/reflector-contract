@@ -1,7 +1,8 @@
-use soroban_sdk::{ Env, Address, panic_with_error, Vec, BytesN };
 use crate::constants::Constants;
 use crate::extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
-use crate::types::{ config_data::ConfigData, error::Error, price_data::PriceData };
+use crate::types::asset::Asset;
+use crate::types::{config_data::ConfigData, error::Error, price_data::PriceData};
+use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
 pub struct PriceOracle;
 
@@ -16,7 +17,7 @@ impl PriceOracle {
         e.set_assets(config.assets);
     }
 
-    pub fn add_assets(e: &Env, user: Address, assets: Vec<Address>) {
+    pub fn add_assets(e: &Env, user: Address, assets: Vec<Asset>) {
         e.panic_if_not_admin(&user);
 
         let mut presented_assets = e.get_assets();
@@ -89,9 +90,8 @@ impl PriceOracle {
         e.get_admin()
     }
 
-    pub fn base(e: &Env) -> Address {
-        let bytes = BytesN::from_array(&e, &Constants::BASE);
-        Address::from_contract_id(&e, &bytes)
+    pub fn base(e: &Env) -> Asset {
+        e.get_base_asset()
     }
 
     pub fn decimals(_e: &Env) -> u32 {
@@ -107,11 +107,11 @@ impl PriceOracle {
         e.get_retention_period()
     }
 
-    pub fn assets(e: &Env) -> Vec<Address> {
+    pub fn assets(e: &Env) -> Vec<Asset> {
         e.get_assets()
     }
 
-    pub fn price(e: &Env, asset: Address, timestamp: u64) -> Option<PriceData> {
+    pub fn price(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
 
         //get the price
@@ -128,7 +128,7 @@ impl PriceOracle {
     }
 
     //Get the price for an asset.
-    pub fn lastprice(e: &Env, asset: Address) -> Option<PriceData> {
+    pub fn lastprice(e: &Env, asset: Asset) -> Option<PriceData> {
         //get the last timestamp
         let timestamp = e.get_last_timestamp().unwrap_or(0);
         if timestamp == 0 {
@@ -149,8 +149,8 @@ impl PriceOracle {
 
     pub fn x_price(
         e: &Env,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
         let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
@@ -167,7 +167,7 @@ impl PriceOracle {
         })
     }
 
-    pub fn x_last_price(e: &Env, base_asset: Address, quote_asset: Address) -> Option<PriceData> {
+    pub fn x_last_price(e: &Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
         let timestamp = e.get_last_timestamp().unwrap_or(0);
         if timestamp == 0 {
             return None;
@@ -184,20 +184,20 @@ impl PriceOracle {
         })
     }
 
-    pub fn prices(e: &Env, asset: Address, records: u32) -> Option<Vec<PriceData>> {
+    pub fn prices(e: &Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         e.get_prices(asset, records)
     }
 
     pub fn x_prices(
         e: &Env,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
         e.get_x_prices(base_asset, quote_asset, records)
     }
 
-    pub fn twap(e: &Env, asset: Address, records: u32) -> Option<i128> {
+    pub fn twap(e: &Env, asset: Asset, records: u32) -> Option<i128> {
         let prices_result = e.get_prices(asset, records);
         if prices_result.is_none() {
             return None;
@@ -214,7 +214,7 @@ impl PriceOracle {
         Some(sum / (prices.len() as i128))
     }
 
-    pub fn x_twap(e: &Env, base_asset: Address, quote_asset: Address, records: u32) -> Option<i128> {
+    pub fn x_twap(e: &Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
         let prices_result = e.get_x_prices(base_asset, quote_asset, records);
         if prices_result.is_none() {
             return None;
@@ -232,7 +232,7 @@ impl PriceOracle {
     }
 }
 
-fn is_asset_presented(assets: &Vec<Address>, asset: &Address) -> bool {
+fn is_asset_presented(assets: &Vec<Asset>, asset: &Asset) -> bool {
     for a in assets.iter() {
         let a = a.unwrap();
         if &a == asset {

@@ -3,6 +3,7 @@
 mod test;
 
 use shared::price_oracle::PriceOracle;
+use shared::types::asset::Asset;
 use shared::types::{config_data::ConfigData, price_data::PriceData};
 use soroban_sdk::{contractimpl, Address, Env, Vec};
 pub struct PriceOracleContract;
@@ -35,7 +36,7 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the assets are already added.
-    pub fn add_assets(e: Env, user: Address, assets: Vec<Address>) {
+    pub fn add_assets(e: Env, user: Address, assets: Vec<Asset>) {
         PriceOracle::add_assets(&e, user, assets)
     }
 
@@ -65,12 +66,12 @@ impl PriceOracleContract {
         PriceOracle::admin(&e)
     }
 
-    /// Returns the base asset address.
+    /// Returns the base asset.
     /// 
     /// # Returns
     /// 
-    /// The base asset address.
-    pub fn base(e: Env) -> Address {
+    /// The base asset.
+    pub fn base(e: Env) -> Asset {
         PriceOracle::base(&e)
     }
 
@@ -106,7 +107,7 @@ impl PriceOracleContract {
     /// # Returns
     /// 
     /// The assets supported by the contract or None if no assets are supported.
-    pub fn assets(e: Env) -> Vec<Address> {
+    pub fn assets(e: Env) -> Vec<Asset> {
         PriceOracle::assets(&e)
     }
 
@@ -114,13 +115,13 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `asset` - The asset address.
+    /// * `asset` - The asset.
     /// * `timestamp` - The timestamp.
     /// 
     /// # Returns
     /// 
     /// The prices for the given asset at the given timestamp or None if the asset is not supported, or if the timestamp is invalid. 
-    pub fn price(e: Env, asset: Address, timestamp: u64) -> Option<PriceData> {
+    pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         PriceOracle::price(&e, asset, timestamp)
     }
 
@@ -128,12 +129,12 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `asset` - The asset address.
+    /// * `asset` - The asset.
     /// 
     /// # Returns
     /// 
     /// The last price for the given asset or None if the asset is not supported.
-    pub fn lastprice(e: Env, asset: Address) -> Option<PriceData> {
+    pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
         PriceOracle::lastprice(&e, asset)
     }
 
@@ -141,8 +142,8 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `base_asset` - The base asset address.
-    /// * `quote_asset` - The quote asset address.
+    /// * `base_asset` - The base asset.
+    /// * `quote_asset` - The quote asset.
     /// * `timestamp` - The timestamp.
     /// 
     /// # Returns
@@ -150,8 +151,8 @@ impl PriceOracleContract {
     /// The cross price for the given assets at the given timestamp or None if the assets are not supported, or if the timestamp is invalid.
     pub fn x_price(
         e: Env,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
         PriceOracle::x_price(&e, base_asset, quote_asset, timestamp)
@@ -161,13 +162,13 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `base_asset` - The base asset address.
-    /// * `quote_asset` - The quote asset address.
+    /// * `base_asset` - The base asset.
+    /// * `quote_asset` - The quote asset.
     /// 
     /// # Returns
     /// 
     /// The last cross price for the given assets or None if the assets are not supported.
-    pub fn x_last_price(e: Env, base_asset: Address, quote_asset: Address) -> Option<PriceData> {
+    pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
         PriceOracle::x_last_price(&e, base_asset, quote_asset)
     }
 
@@ -175,13 +176,13 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `asset` - The asset address.
+    /// * `asset` - The asset.
     /// * `records` - The number of records to return.
     /// 
     /// # Returns
     /// 
     /// The prices for the given asset or None if the asset is not supported. If there are fewer records than requested, the returned vector will be shorter.
-    pub fn prices(e: Env, asset: Address, records: u32) -> Option<Vec<PriceData>> {
+    pub fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         PriceOracle::prices(&e, asset, records)
     }
 
@@ -189,16 +190,16 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `base_asset` - The base asset address.
-    /// * `quote_asset` - The quote asset address.
+    /// * `base_asset` - The base asset.
+    /// * `quote_asset` - The quote asset.
     /// 
     /// # Returns
     /// 
     /// The cross prices for the given assets or None if the assets are not supported. If there are fewer records than requested, the returned vector will be shorter.
     pub fn x_prices(
         e: Env,
-        base_asset: Address,
-        quote_asset: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
         PriceOracle::x_prices(&e, base_asset, quote_asset, records)
@@ -208,13 +209,13 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `asset` - The asset address.
+    /// * `asset` - The asset.
     /// * `records` - The number of records to use.
     /// 
     /// # Returns
     /// 
     /// The time-weighted average price for the given asset over the given number of records or None if the asset is not supported.
-    pub fn twap(e: Env, asset: Address, records: u32) -> Option<i128> {
+    pub fn twap(e: Env, asset: Asset, records: u32) -> Option<i128> {
         PriceOracle::twap(&e, asset, records)
     }
 
@@ -222,13 +223,13 @@ impl PriceOracleContract {
     /// 
     /// # Arguments
     /// 
-    /// * `base_asset` - The base asset address.
-    /// * `quote_asset` - The quote asset address.
+    /// * `base_asset` - The base asset.
+    /// * `quote_asset` - The quote asset.
     /// 
     /// # Returns
     /// 
     /// The time-weighted average cross price for the given assets over the given number of records or None if the assets are not supported.
-    pub fn x_twap(e: Env, base_asset: Address, quote_asset: Address, records: u32) -> Option<i128> {
+    pub fn x_twap(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
         PriceOracle::x_twap(&e, base_asset, quote_asset, records)
     }
 }
