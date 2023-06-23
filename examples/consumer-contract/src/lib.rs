@@ -1,13 +1,13 @@
 #![no_std]
 
-use soroban_sdk::{contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::{contractimpl, Address, Env, Vec};
 
 /// Import the price oracle contract
 mod oracle {
     soroban_sdk::contractimport!(file = "./se_price_oracle.wasm");
 }
 
-use oracle::{Client as PriceOracleClient, PriceData};
+use oracle::{Client as PriceOracleClient, PriceData, Asset};
 
 pub struct PriceOracleConsumerContract;
 
@@ -23,7 +23,7 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `Address` - the admin address of the price oracle contract
-    pub fn admin(e: Env, contract_id: BytesN<32>) -> Address {
+    pub fn admin(e: Env, contract_id: Address) -> Address {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.admin()
     }
@@ -36,8 +36,8 @@ impl PriceOracleConsumerContract {
     /// 
     /// # Returns
     /// 
-    /// * `Address` - the base asset of the price oracle contract
-    pub fn base(e: Env, contract_id: BytesN<32>) -> Address {
+    /// * `Asset` - the base asset of the price oracle contract
+    pub fn base(e: Env, contract_id: Address) -> Asset {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.base()
     }
@@ -51,7 +51,7 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `u32` - the decimals of the price oracle contract
-    pub fn decimals(e: Env, contract_id: BytesN<32>) -> u32 {
+    pub fn decimals(e: Env, contract_id: Address) -> u32 {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.decimals()
     }
@@ -65,7 +65,7 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `u32` - the prices resolution of the price oracle contract
-    pub fn resolution(e: Env, contract_id: BytesN<32>) -> u32 {
+    pub fn resolution(e: Env, contract_id: Address) -> u32 {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.resolution()
     }
@@ -79,7 +79,7 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `u64` - the retention period of the price oracle contract
-    pub fn period(e: Env, contract_id: BytesN<32>) -> Option<u64> {
+    pub fn period(e: Env, contract_id: Address) -> Option<u64> {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.period()
     }
@@ -92,8 +92,8 @@ impl PriceOracleConsumerContract {
     /// 
     /// # Returns
     /// 
-    /// * `Vec<Address>` - the assets of the price oracle contract
-    pub fn assets(e: Env, contract_id: BytesN<32>) -> Vec<Address> {
+    /// * `Vec<Asset>` - the assets of the price oracle contract
+    pub fn assets(e: Env, contract_id: Address) -> Vec<Asset> {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.assets()
     }
@@ -115,8 +115,8 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn price(
         e: Env,
-        contract_id: BytesN<32>,
-        asset: Address,
+        contract_id: Address,
+        asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
         let contract = PriceOracleClient::new(&e, &contract_id);
@@ -137,7 +137,7 @@ impl PriceOracleConsumerContract {
     /// # Panics
     /// 
     /// * If the contract call fails or the contract returns an error
-    pub fn lastprice(e: Env, contract_id: BytesN<32>, asset: Address) -> Option<PriceData> {
+    pub fn lastprice(e: Env, contract_id: Address, asset: Asset) -> Option<PriceData> {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.lastprice(&asset)
     }
@@ -160,9 +160,9 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_price(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
         let contract = PriceOracleClient::new(&e, &contract_id);
@@ -186,9 +186,9 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_last_price(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
     ) -> Option<PriceData> {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.x_last_price(&base_asset, &quote_asset)
@@ -211,8 +211,8 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn prices(
         e: Env,
-        contract_id: BytesN<32>,
-        asset: Address,
+        contract_id: Address,
+        asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
         let contract = PriceOracleClient::new(&e, &contract_id);
@@ -237,9 +237,9 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_prices(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
         let contract = PriceOracleClient::new(&e, &contract_id);
@@ -261,7 +261,7 @@ impl PriceOracleConsumerContract {
     /// # Panics
     /// 
     /// * If the contract call fails or the contract returns an error
-    pub fn twap(e: Env, contract_id: BytesN<32>, asset: Address, records: u32) -> Option<i128> {
+    pub fn twap(e: Env, contract_id: Address, asset: Asset, records: u32) -> Option<i128> {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.twap(&asset, &records)
     }
@@ -284,9 +284,9 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_twap(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<i128> {
         let contract = PriceOracleClient::new(&e, &contract_id);

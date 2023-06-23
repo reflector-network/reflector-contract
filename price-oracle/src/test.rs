@@ -3,76 +3,31 @@ extern crate std;
 extern crate alloc;
 
 use super::*;
-use alloc::rc::Rc;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, xdr, Symbol};
+use alloc::string::ToString;
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
 
 use shared::{constants::Constants, extensions::{u64_extensions::U64Extensions, env_extensions::EnvExtensions}, types::asset::Asset};
 
-pub fn register_account(e: &Env, account: &[u8; 32]) {
-    let account_id = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256(
-        account.clone(),
-    )));
-    e.host()
-            .with_mut_storage(|storage| {
-                let k = Rc::new(xdr::LedgerKey::Account(xdr::LedgerKeyAccount {
-                    account_id: account_id.clone(),
-                }));
-
-                let budget = e.host().budget_cloned();
-
-                if !storage.has(
-                    &k,
-                    &budget,
-                )? {
-                    let v = Rc::new(xdr::LedgerEntry {
-                        data: xdr::LedgerEntryData::Account(xdr::AccountEntry {
-                            account_id: account_id.clone(),
-                            balance: 0,
-                            flags: 0,
-                            home_domain: Default::default(),
-                            inflation_dest: None,
-                            num_sub_entries: 0,
-                            seq_num: xdr::SequenceNumber(0),
-                            thresholds: xdr::Thresholds([1; 4]),
-                            signers: xdr::VecM::default(),
-                            ext: xdr::AccountEntryExt::V0,
-                        }),
-                        last_modified_ledger_seq: 0,
-                        ext: xdr::LedgerEntryExt::V0,
-                    });
-                    storage.put(
-                        &k,
-                        &v,
-                        &budget,
-                    )?
-                }
-                Ok(())
-            })
-            .unwrap();
-}
-
-fn init_contract_with_admin() -> (Env, PriceOracleContractClient, ConfigData) {
+fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
     let env = Env::default();
 
-    register_account(&env, &Constants::ADMIN);
+    let admin = Address::random(&env);
 
-    let contract_id = BytesN::from_array(&env, &[0; 32]);
-    env.register_contract(&contract_id, PriceOracleContract);
-    let client = PriceOracleContractClient::new(&env, &contract_id);
+    let contract_id = &Address::from_contract_id(&BytesN::from_array(&env, &[0; 32]));
+    env.register_contract(contract_id, PriceOracleContract);
+    let client: PriceOracleContractClient<'a> = PriceOracleContractClient::new(&env, contract_id);
 
     let resolution: u32 = 300_000;
 
     let init_data = ConfigData {
-        admin: Address::random(&env),
+        admin: admin.clone(),
         period: (100 * resolution).into(),
         assets: generate_assets(&env, 10),
         base_fee: 0,
     };
 
-    let default_admin = Address::from_account_id(&env, &BytesN::from_array(&env, &Constants::ADMIN));
-
     //set admin
-    client.config(&default_admin, &init_data);
+    client.config(&admin, &init_data);
 
     (env, client, init_data)
 }
@@ -87,7 +42,7 @@ fn generate_assets(e: &Env, count: usize) -> Vec<Asset> {
         if i % 2 == 0 {
             assets.push_back(Asset::Stellar(Address::random(&e)));
         } else {
-            assets.push_back(Asset::Generic(Symbol::new(e, &stringify!("ASSET_{}", i))));
+            assets.push_back(Asset::Generic(Symbol::new(e, &("ASSET_".to_string() + &i.to_string()))));
         }
     }
     assets
@@ -134,6 +89,8 @@ fn last_price_test() {
     let timestamp = 600_000;
     let updates = get_updates(&env, assets.clone(), normalize_price(100));
 
+    env.mock_all_auths();
+
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
@@ -164,6 +121,8 @@ fn get_price_test() {
 
     let timestamp = 600_000;
     let updates = get_updates(&env, assets.clone(), normalize_price(100));
+
+    env.mock_all_auths();
 
     client.set_price(&admin, &updates, &timestamp);
 
@@ -205,6 +164,8 @@ fn get_x_last_price_test() {
     let timestamp = 600_000;
     let updates = get_updates(&env, assets.clone(), normalize_price(100));
 
+    env.mock_all_auths();
+
     client.set_price(&admin, &updates, &timestamp);
 
     //check last x price
@@ -231,6 +192,8 @@ fn get_x_price_test() {
 
     let timestamp = 600_000;
     let updates = get_updates(&env, assets.clone(), normalize_price(100));
+
+    env.mock_all_auths();
 
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
@@ -281,6 +244,8 @@ fn twap_test() {
     let timestamp = 600_000;
     let updates = get_updates(&env, assets.clone(), normalize_price(100));
 
+    env.mock_all_auths();
+
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
@@ -305,6 +270,8 @@ fn x_twap_test() {
 
     let timestamp = 600_000;
     let updates = get_updates(&env, assets.clone(), normalize_price(100));
+
+    env.mock_all_auths();
 
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
@@ -334,7 +301,7 @@ fn get_non_registered_asset_price_test() {
     assert_eq!(result, None);
 
     //try to get price for unknown Generic asset
-    result = client.lastprice(&Asset::Generic(Symbol::new(&env, stringify!("NonRegisteredAsset"))));
+    result = client.lastprice(&Asset::Generic(Symbol::new(&env, "NonRegisteredAsset")));
     assert_eq!(result, None);
 
     //try to get price for unknown base asset
@@ -346,7 +313,7 @@ fn get_non_registered_asset_price_test() {
     assert_eq!(result, None);
 
     //try to get price for both unknown assets
-    result = client.x_last_price(&Asset::Stellar(Address::random(&env)), &Asset::Generic(Symbol::new(&env, stringify!("NonRegisteredAsset"))));
+    result = client.x_last_price(&Asset::Stellar(Address::random(&env)), &Asset::Generic(Symbol::new(&env, "NonRegisteredAsset")));
     assert_eq!(result, None);
 }
 
@@ -374,6 +341,10 @@ fn unauthorized_test() {
 
     let account = Address::random(&env);
     let timestamp = (112331 as u64).get_normalized_timestamp(Constants::RESOLUTION as u64);
+
+    //mock auth to check only contract's admin validation
+    env.mock_all_auths();
+
     //set prices for assets
     client.set_price(&account, &updates, &timestamp);
 }

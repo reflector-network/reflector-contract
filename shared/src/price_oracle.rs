@@ -10,7 +10,9 @@ impl PriceOracle {
     //Admin section
 
     pub fn config(e: &Env, user: Address, config: ConfigData) {
-        e.panic_if_not_admin(&user);
+        if e.is_initialized() {
+            e.panic_if_not_admin(&user);
+        }
 
         e.set_admin(&config.admin);
         e.set_retention_period(config.period);

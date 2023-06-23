@@ -1,5 +1,4 @@
-use soroban_sdk::Symbol;
-use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec};
+use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec, Symbol};
 
 use crate::constants;
 use crate::extensions;
@@ -14,8 +13,6 @@ use types::{
 
 pub trait EnvExtensions {
     fn is_authorized(&self, invoker: &Address) -> bool;
-
-    fn is_initialized(&self) -> bool;
 
     fn get_admin(&self) -> Address;
 
@@ -48,7 +45,7 @@ pub trait EnvExtensions {
         records: u32,
     ) -> Option<Vec<PriceData>>;
 
-    fn invoker(&self) -> Option<BytesN<32>>;
+    fn invoker(&self) -> Option<Address>;
 
     fn try_delete_data(&self, key: DataKey) -> bool;
 
@@ -57,10 +54,12 @@ pub trait EnvExtensions {
     fn panic_if_not_admin(&self, invoker: &Address);
 
     fn get_base_asset(&self) -> Asset;
+
+    fn is_initialized(&self) -> bool;
 }
 
 impl EnvExtensions for Env {
-    #[allow(unreachable_code)]
+
     fn is_authorized(&self, invoker: &Address) -> bool {
         invoker.require_auth();
 
@@ -74,11 +73,6 @@ impl EnvExtensions for Env {
     }
 
     fn get_admin(&self) -> Address {
-        if !self.storage().has(&DataKey::Admin) {
-            //return the default admin if the admin is not set
-            let bytes = BytesN::from_array(&self, &Constants::ADMIN);
-            return Address::from_account_id(&self, &bytes);
-        }
         self.storage().get_unchecked(&DataKey::Admin).unwrap()
     }
 
@@ -180,7 +174,7 @@ impl EnvExtensions for Env {
         )
     }
 
-    fn invoker(&self) -> Option<BytesN<32>> {
+    fn invoker(&self) -> Option<Address> {
         let last_invoker = self.call_stack().first();
         if last_invoker.is_none() {
             return None;
@@ -225,7 +219,8 @@ impl EnvExtensions for Env {
         match Constants::BASE_ASSET_TYPE {
             AssetType::STELLAR => {
                 let asset_bytes = BytesN::from_array(self, &Constants::BASE);
-                return Asset::Stellar(Address::from_contract_id(self, &asset_bytes));
+                let address = Address::from_contract_id(&asset_bytes);
+                return Asset::Stellar(address);
             }
             AssetType::GENERIC => {
                 //drop the trailing zeros

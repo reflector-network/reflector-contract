@@ -1,119 +1,38 @@
 #![cfg(test)]
-extern crate std;
 extern crate alloc;
+extern crate std;
 
-use alloc::rc::Rc;
-use soroban_sdk::{testutils::Address as _, xdr, Address, BytesN, Env, Symbol, TryIntoVal};
+use alloc::string::ToString;
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
 
 use shared::{constants::Constants, extensions::u64_extensions::U64Extensions};
 
 use super::*;
 
-pub fn register_account(e: &Env, account: &[u8; 32]) {
-    let account_id = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256(
-        account.clone(),
-    )));
-    e.host()
-            .with_mut_storage(|storage| {
-                let k = Rc::new(xdr::LedgerKey::Account(xdr::LedgerKeyAccount {
-                    account_id: account_id.clone(),
-                }));
-
-                let budget = e.host().budget_cloned();
-
-                if !storage.has(
-                    &k,
-                    &budget,
-                )? {
-                    let v = Rc::new(xdr::LedgerEntry {
-                        data: xdr::LedgerEntryData::Account(xdr::AccountEntry {
-                            account_id: account_id.clone(),
-                            balance: 0,
-                            flags: 0,
-                            home_domain: Default::default(),
-                            inflation_dest: None,
-                            num_sub_entries: 0,
-                            seq_num: xdr::SequenceNumber(0),
-                            thresholds: xdr::Thresholds([1; 4]),
-                            signers: xdr::VecM::default(),
-                            ext: xdr::AccountEntryExt::V0,
-                        }),
-                        last_modified_ledger_seq: 0,
-                        ext: xdr::LedgerEntryExt::V0,
-                    });
-                    storage.put(
-                        &k,
-                        &v,
-                        &budget,
-                    )?
-                }
-                Ok(())
-            })
-            .unwrap();
-}
-
-pub fn register_stellar_asset_contract(e: &Env, admin: Address) -> Address {
-    let issuer_id = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256(
-        Constants::ADMIN.clone(),
-    )));
-
-    let asset = xdr::Asset::CreditAlphanum4(xdr::AlphaNum4 {
-        asset_code: xdr::AssetCode4([1, 1, 1, 1]),
-        issuer: issuer_id.clone(),
-    });
-    let create = xdr::HostFunction::CreateContract(xdr::CreateContractArgs {
-        contract_id: xdr::ContractId::Asset(asset.clone()),
-        source: xdr::ScContractExecutable::Token,
-    });
-
-    let token_id: BytesN<32> = e
-        .host()
-        .invoke_function(create)
-        .unwrap()
-        .try_into_val(e)
-        .unwrap();
-
-    let issuer_address = Address::from_account_id(e, &BytesN::from_array(e, &Constants::ADMIN));
-
-    let _: () = e.invoke_contract(
-        &token_id,
-        &Symbol::short("set_admin"),
-        (&issuer_address, &admin).try_into_val(e).unwrap(),
-    );
-
-    Address::from_contract_id(e, &token_id)
-}
-
-fn mint(e: &Env, admin: &Address, token: &Address, user: &Address, amount: i128) {
-    let token = token::Client::new(&e, &token.contract_id().unwrap());
-    token.mint(&admin, &user, &amount);
-}
-
-fn init_contract_with_admin() -> (Env, PriceOracleContractClient, ConfigData, Address) {
+fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData, Address) {
     let env = Env::default();
 
-    register_account(&env, &Constants::ADMIN);
-
-    let contract_id = BytesN::from_array(&env, &[0; 32]);
+    let contract_id = Address::from_contract_id(&BytesN::from_array(&env, &[0; 32]));
     env.register_contract(&contract_id, PriceOracleContract);
     let client = PriceOracleContractClient::new(&env, &contract_id);
 
     let resolution: u32 = 300_000;
 
+    let admin = Address::random(&env);
+
     let config_data = ConfigData {
-        admin: Address::random(&env),
+        admin: admin.clone(),
         period: (100 * resolution).into(),
         assets: generate_assets(&env, 10),
         base_fee: 100,
     };
 
-    let token = register_stellar_asset_contract(&env, config_data.admin.clone());
+    let token = env.register_stellar_asset_contract(config_data.admin.clone());
 
-    let default_admin = Address::from_account_id(&env, &BytesN::from_array(&env, &Constants::ADMIN));
+    env.mock_all_auths();
 
     //set admin
-    client.config(&default_admin, &config_data);
-
+    client.config(&admin, &config_data);
 
     (env, client, config_data, token)
 }
@@ -128,7 +47,10 @@ fn generate_assets(e: &Env, count: usize) -> Vec<Asset> {
         if i % 2 == 0 {
             assets.push_back(Asset::Stellar(Address::random(&e)));
         } else {
-            assets.push_back(Asset::Generic(Symbol::new(e, &stringify!("ASSET_{}", i))));
+            assets.push_back(Asset::Generic(Symbol::new(
+                e,
+                &("ASSET_".to_string() + &i.to_string()),
+            )));
         }
     }
     assets
@@ -143,32 +65,14 @@ fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
 }
 
 fn get_contract_address(e: &Env, bytes: [u8; 32]) -> Address {
-    Address::from_contract_id(e, &BytesN::from_array(e, &bytes))
+    Address::from_contract_id(&BytesN::from_array(e, &bytes))
 }
 
-fn deposit(
-    e: &Env,
-    client: &PriceOracleContractClient,
-    config_data: &ConfigData,
-    user: &Address,
-    contract: &BytesN<32>,
-    token: &Address,
-    amount: &i128,
-) {
-    mint(e, &config_data.admin, token, user, 10000);
-    client.deposit(user, contract, token, amount);
-}
-
-fn deposit_random_contract(
-    e: &Env,
-    client: &PriceOracleContractClient,
-    config_data: &ConfigData,
-    token: &Address,
-    amount: &i128,
-) -> BytesN<32> {
-    let user = Address::random(&e);
-    let contract = Address::random(&e).contract_id().unwrap();
-    deposit(e, client, config_data, &user, &contract, token, amount);
+fn deposit_random_contract(e: &Env, as_contract: &Address, amount: i128) -> Address {
+    let contract = Address::random(&e);
+    e.as_contract(as_contract, || {
+        e.try_inc_balance(contract.clone(), amount);
+    });
     contract
 }
 
@@ -203,9 +107,9 @@ fn init_test() {
 
 #[test]
 fn deposit_and_charge_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &100);
+    let contract = deposit_random_contract(&env, &client.address, 100);
 
     let mut balance = client.balance(&contract);
     assert_ne!(balance, None);
@@ -214,6 +118,7 @@ fn deposit_and_charge_test() {
     let updates = get_updates(&env, &config_data.assets, normalize_price(100));
 
     let timestamp = 600_000;
+
     client.set_price(&config_data.admin, &updates, &timestamp);
 
     let price = env.as_contract(&contract, || {
@@ -228,7 +133,7 @@ fn deposit_and_charge_test() {
 
 #[test]
 fn last_price_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
     let admin = &config_data.admin;
     let assets = &config_data.assets;
@@ -246,7 +151,7 @@ fn last_price_test() {
     client.set_price(&admin, &updates, &timestamp);
 
     //check last prices
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &100);
+    let contract = deposit_random_contract(&env, &client.address, 100);
 
     let result = env.as_contract(&contract, || {
         client.lastprice(&assets.get_unchecked(1).unwrap())
@@ -263,7 +168,7 @@ fn last_price_test() {
 
 #[test]
 fn get_price_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
     let admin = &config_data.admin;
     let assets = &config_data.assets;
@@ -278,7 +183,7 @@ fn get_price_test() {
 
     client.set_price(&admin, &updates, &timestamp);
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &200);
+    let contract = deposit_random_contract(&env, &client.address, 200);
 
     //check last prices
     let mut result = env.as_contract(&contract, || {
@@ -309,7 +214,7 @@ fn get_price_test() {
 
 #[test]
 fn get_x_last_price_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
     let admin = &config_data.admin;
     let assets = &config_data.assets;
@@ -319,7 +224,7 @@ fn get_x_last_price_test() {
 
     client.set_price(&admin, &updates, &timestamp);
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &200);
+    let contract = deposit_random_contract(&env, &client.address, 200);
 
     //check last x price
     let result = env.as_contract(&contract, || {
@@ -340,7 +245,7 @@ fn get_x_last_price_test() {
 
 #[test]
 fn get_x_price_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
     let admin = &config_data.admin;
     let assets = &config_data.assets;
@@ -357,7 +262,7 @@ fn get_x_price_test() {
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &400);
+    let contract = deposit_random_contract(&env, &client.address, 400);
 
     //check last prices
     let mut result = env.as_contract(&contract, || {
@@ -395,7 +300,7 @@ fn get_x_price_test() {
 
 #[test]
 fn twap_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
     let admin = &config_data.admin;
     let assets = &config_data.assets;
@@ -412,7 +317,7 @@ fn twap_test() {
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &200);
+    let contract = deposit_random_contract(&env, &client.address, 200);
 
     let result = env.as_contract(&contract, || {
         client.twap(&assets.get_unchecked(1).unwrap(), &2)
@@ -424,7 +329,7 @@ fn twap_test() {
 
 #[test]
 fn x_twap_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
     let admin = &config_data.admin;
     let assets = &config_data.assets;
@@ -441,7 +346,7 @@ fn x_twap_test() {
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &400);
+    let contract = deposit_random_contract(&env, &client.address, 400);
 
     let result = env.as_contract(&contract, || {
         client.x_twap(
@@ -457,39 +362,62 @@ fn x_twap_test() {
 
 #[test]
 fn get_non_registered_asset_price_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &1000);
+    let contract = deposit_random_contract(&env, &client.address, 1000);
 
     //try to get price for unknown asset
-    let mut result = env.as_contract(&contract, || {client.lastprice(&Asset::Generic(Symbol::new(&env, stringify!("NonRegisteredAsset")))) });
+    let mut result = env.as_contract(&contract, || {
+        client.lastprice(&Asset::Generic(Symbol::new(
+            &env,
+            "NonRegisteredAsset",
+        )))
+    });
     assert_eq!(result, None);
 
     //try to get price for unknown base asset
-    result = env.as_contract(&contract, || {client.x_last_price(&Asset::Stellar(Address::random(&env)), &config_data.assets.get_unchecked(1).unwrap()) });
+    result = env.as_contract(&contract, || {
+        client.x_last_price(
+            &Asset::Stellar(Address::random(&env)),
+            &config_data.assets.get_unchecked(1).unwrap(),
+        )
+    });
     assert_eq!(result, None);
 
     //try to get price for unknown quote asset
-    result = env.as_contract(&contract, || {client.x_last_price(&config_data.assets.get_unchecked(1).unwrap(), &Asset::Stellar(Address::random(&env))) });
+    result = env.as_contract(&contract, || {
+        client.x_last_price(
+            &config_data.assets.get_unchecked(1).unwrap(),
+            &Asset::Stellar(Address::random(&env)),
+        )
+    });
     assert_eq!(result, None);
 
     //try to get price for both unknown assets
-    result = env.as_contract(&contract, || {client.x_last_price(&Asset::Stellar(Address::random(&env)), &Asset::Generic(Symbol::new(&env, stringify!("NonRegisteredAsset")))) });
+    result = env.as_contract(&contract, || {
+        client.x_last_price(
+            &Asset::Stellar(Address::random(&env)),
+            &Asset::Generic(Symbol::new(&env, "NonRegisteredAsset")),
+        )
+    });
     assert_eq!(result, None);
 }
 
 #[test]
 fn get_asset_price_for_invalid_timestamp_test() {
-    let (env, client, config_data, token) = init_contract_with_admin();
+    let (env, client, config_data, _) = init_contract_with_admin();
 
-    let contract = deposit_random_contract(&env, &client, &config_data, &token, &400);
+    let contract = deposit_random_contract(&env, &client.address, 400);
 
-    
-    let mut result = env.as_contract(&contract, || {client.price(&config_data.assets.get_unchecked(1).unwrap(), &u64::MAX) });
+    let mut result = env.as_contract(&contract, || {
+        client.price(&config_data.assets.get_unchecked(1).unwrap(), &u64::MAX)
+    });
     assert_eq!(result, None);
 
     //try to get price for unknown asset
-    result = env.as_contract(&contract, || {client.lastprice(&Asset::Stellar(Address::random(&env))) });
+    result = env.as_contract(&contract, || {
+        client.lastprice(&Asset::Stellar(Address::random(&env)))
+    });
     assert_eq!(result, None);
 }
 
