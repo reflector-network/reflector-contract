@@ -1,4 +1,4 @@
-use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec, Symbol};
+use soroban_sdk::{panic_with_error, Address, BytesN, Env, Symbol, Vec};
 
 use crate::constants;
 use crate::extensions;
@@ -59,7 +59,6 @@ pub trait EnvExtensions {
 }
 
 impl EnvExtensions for Env {
-
     fn is_authorized(&self, invoker: &Address) -> bool {
         invoker.require_auth();
 
@@ -69,15 +68,16 @@ impl EnvExtensions for Env {
     }
 
     fn is_initialized(&self) -> bool {
-        self.storage().has(&DataKey::Admin)
+        self.storage().persistent().has(&DataKey::Admin)
     }
 
     fn get_admin(&self) -> Address {
-        self.storage().get_unchecked(&DataKey::Admin).unwrap()
+        //TODO: add getting default admin from constants, when convertion from string to address is implemented in soroban-sdk
+        self.storage().persistent().get(&DataKey::Admin).unwrap()
     }
 
     fn set_admin(&self, admin: &Address) {
-        self.storage().set(&DataKey::Admin, admin);
+        self.storage().persistent().set(&DataKey::Admin, admin);
     }
 
     fn get_price(&self, asset: Asset, timestamp: u64) -> Option<i128> {
@@ -85,12 +85,12 @@ impl EnvExtensions for Env {
         let data_key = DataKey::Price(AssetPriceKey { asset, timestamp });
 
         //check if the price is available
-        if !self.storage().has(&data_key) {
+        if !self.storage().persistent().has(&data_key) {
             return None;
         }
 
         //get the price
-        Some(self.storage().get_unchecked(&data_key).unwrap())
+        Some(self.storage().persistent().get(&data_key).unwrap())
     }
 
     fn set_price(&self, asset: Asset, price: i128, timestamp: u64) {
@@ -101,52 +101,58 @@ impl EnvExtensions for Env {
         });
 
         //set the price
-        self.storage().set(&data_key, &price);
+        self.storage().persistent().set(&data_key, &price);
     }
 
     fn get_last_timestamp(&self) -> Option<u64> {
         //check if the marker is available
-        if !self.storage().has(&DataKey::LastTimestamp) {
+        if !self.storage().persistent().has(&DataKey::LastTimestamp) {
             return None;
         }
 
         //get the marker
         Some(
             self.storage()
-                .get_unchecked(&DataKey::LastTimestamp)
+            .persistent()
+                .get(&DataKey::LastTimestamp)
                 .unwrap(),
         )
     }
 
     fn set_last_timestamp(&self, timestamp: u64) {
-        self.storage().set(&DataKey::LastTimestamp, &timestamp);
+        self.storage().persistent().set(&DataKey::LastTimestamp, &timestamp);
     }
 
     fn get_retention_period(&self) -> Option<u64> {
-        if !self.storage().has(&DataKey::RetentionPeriod) {
+        if !self.storage().persistent().has(&DataKey::RetentionPeriod) {
             return None;
         }
         Some(
             self.storage()
-                .get_unchecked(&DataKey::RetentionPeriod)
+                .persistent()
+                .get(&DataKey::RetentionPeriod)
                 .unwrap(),
         )
     }
 
     fn set_retention_period(&self, rdm_period: u64) {
-        self.storage().set(&DataKey::RetentionPeriod, &rdm_period);
+        self.storage()
+            .persistent()
+            .set(&DataKey::RetentionPeriod, &rdm_period);
     }
 
     fn get_assets(&self) -> Vec<Asset> {
-        if !self.storage().has(&DataKey::Assets) {
+        if !self.storage().persistent().has(&DataKey::Assets) {
             //return empty vector
             return Vec::new(&self);
         }
-        self.storage().get_unchecked(&DataKey::Assets).unwrap()
+        self.storage().persistent().get(&DataKey::Assets).unwrap()
     }
 
     fn set_assets(&self, assets: Vec<Asset>) {
-        self.storage().set(&DataKey::Assets, &assets);
+        self.storage()
+            .persistent()
+            .set(&DataKey::Assets, &assets);
     }
 
     fn get_prices(&self, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
@@ -179,18 +185,14 @@ impl EnvExtensions for Env {
         if last_invoker.is_none() {
             return None;
         }
-        let unwraped = last_invoker.unwrap();
-        if !unwraped.is_ok() {
-            return None;
-        }
-        Some(unwraped.ok().unwrap().0)
+        Some(last_invoker.unwrap().0)
     }
 
     fn try_delete_data(&self, key: DataKey) -> bool {
-        if !self.storage().has(&key) {
+        if !self.storage().persistent().has(&key) {
             return false;
         }
-        self.storage().remove(&key);
+        self.storage().persistent().remove(&key);
         true
     }
 
@@ -202,10 +204,10 @@ impl EnvExtensions for Env {
             asset,
             timestamp: timestamp - period,
         });
-        if !self.storage().has(&data_key) {
+        if !self.storage().persistent().has(&data_key) {
             return false;
         }
-        self.storage().remove(&data_key);
+        self.storage().persistent().remove(&data_key);
         true
     }
 
@@ -224,10 +226,13 @@ impl EnvExtensions for Env {
             }
             AssetType::GENERIC => {
                 //drop the trailing zeros
-                let first_zero_index = Constants::BASE.iter().position(|&b| b == 0).unwrap_or(Constants::BASE.len());
+                let first_zero_index = Constants::BASE
+                    .iter()
+                    .position(|&b| b == 0)
+                    .unwrap_or(Constants::BASE.len());
                 return Asset::Generic(Symbol::new(
                     self,
-                    core::str::from_utf8(&Constants::BASE[..first_zero_index]).unwrap()
+                    core::str::from_utf8(&Constants::BASE[..first_zero_index]).unwrap(),
                 ));
             }
         }
@@ -263,6 +268,9 @@ fn prices<F: Fn(u64) -> Option<i128>>(
             price: price.unwrap(),
             timestamp,
         });
+        if timestamp < resolution {
+            break;
+        }
         timestamp -= resolution;
     }
 

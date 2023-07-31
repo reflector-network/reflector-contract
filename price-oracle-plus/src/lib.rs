@@ -5,12 +5,14 @@ mod extensions;
 
 use shared::constants::Constants;
 use shared::price_oracle::PriceOracle;
-use shared::extensions::{env_extensions::EnvExtensions};
+use shared::extensions::env_extensions::EnvExtensions;
 use shared::types::asset::Asset;
+use shared::types::price_update_item::PriceUpdateItem;
 use shared::types::{error::Error, config_data::ConfigData, price_data::PriceData};
 use extensions::env_balance_extensions::EnvBalanceExtensions;
-use soroban_sdk::{contractimpl, panic_with_error, Address, BytesN, Env, Vec, token};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec, token};
 
+#[contract]
 pub struct PriceOracleContract;
 
 #[contractimpl]
@@ -73,7 +75,7 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the prices are invalid.
-    pub fn set_price(e: Env, user: Address, updates: Vec<i128>, timestamp: u64) {
+    pub fn set_price(e: Env, user: Address, updates: Vec<PriceUpdateItem>, timestamp: u64) {
         PriceOracle::set_price(&e, user, updates, timestamp)
     }
 

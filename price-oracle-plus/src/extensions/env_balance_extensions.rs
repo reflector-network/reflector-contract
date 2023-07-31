@@ -20,14 +20,14 @@ pub trait EnvBalanceExtensions {
 
 impl EnvBalanceExtensions for Env {
     fn get_base_fee(&self) -> Option<i128> {
-        if !self.storage().has(&DataKey::BaseFee) {
+        if !self.storage().persistent().has(&DataKey::BaseFee) {
             return None;
         }
-        Some(self.storage().get_unchecked(&DataKey::BaseFee).unwrap())
+        Some(self.storage().persistent().get(&DataKey::BaseFee).unwrap())
     }
 
     fn set_base_fee(&self, base_fee: i128) {
-        self.storage().set(&DataKey::BaseFee, &base_fee);
+        self.storage().persistent().set(&DataKey::BaseFee, &base_fee);
     }
 
     fn has_sufficient_balance(&self, account: Address, amount: i128) -> bool {
@@ -47,13 +47,13 @@ impl EnvBalanceExtensions for Env {
 
     fn get_balance(&self, account: Address) -> Option<i128> {
         let balance_key = DataKey::Balance(account);
-        if self.storage().has(&balance_key) {
-            return Some(self.storage().get_unchecked(&balance_key).unwrap());
+        if self.storage().persistent().has(&balance_key) {
+            return Some(self.storage().persistent().get(&balance_key).unwrap());
         }
         None
     }
 }
 
 fn set_balance(e: &Env, account: Address, amount: i128) {
-    e.storage().set(&DataKey::Balance(account), &amount);
+    e.storage().persistent().set(&DataKey::Balance(account), &amount);
 }

@@ -18,13 +18,10 @@ codegen-units = 1
 lto = true
 
 [workspace.dependencies.soroban-sdk]
-version = "0.8.7"
+version = "0.9.2"
 
 [workspace.dependencies.hex]
 version = "0.4.3"
 
 [workspace.dependencies.stellar-strkey]
 version = "0.0.7"
-
-[workspace.dev_dependencies.soroban-sdk]
-version = "0.8.7"

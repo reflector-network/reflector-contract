@@ -56,10 +56,13 @@ fn generate_assets(e: &Env, count: usize) -> Vec<Asset> {
     assets
 }
 
-fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
+fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<PriceUpdateItem> {
     let mut updates = Vec::new(&env);
-    for _ in assets.iter() {
-        updates.push_back(price);
+    for asset in assets.iter() {
+        updates.push_back(PriceUpdateItem {
+            asset: asset.clone(),
+            price
+        });
     }
     updates
 }
@@ -122,7 +125,7 @@ fn deposit_and_charge_test() {
     client.set_price(&config_data.admin, &updates, &timestamp);
 
     let price = env.as_contract(&contract, || {
-        client.lastprice(&config_data.assets.get_unchecked(1).unwrap())
+        client.lastprice(&config_data.assets.get_unchecked(1))
     });
     assert_ne!(price, None);
 
@@ -154,7 +157,7 @@ fn last_price_test() {
     let contract = deposit_random_contract(&env, &client.address, 100);
 
     let result = env.as_contract(&contract, || {
-        client.lastprice(&assets.get_unchecked(1).unwrap())
+        client.lastprice(&assets.get_unchecked(1))
     });
     assert_ne!(result, None);
     assert_eq!(
@@ -187,7 +190,7 @@ fn get_price_test() {
 
     //check last prices
     let mut result = env.as_contract(&contract, || {
-        client.lastprice(&assets.get_unchecked(1).unwrap())
+        client.lastprice(&assets.get_unchecked(1))
     });
     assert_ne!(result, None);
     assert_eq!(
@@ -200,7 +203,7 @@ fn get_price_test() {
 
     //check price at 899_000
     result = env.as_contract(&contract, || {
-        client.price(&assets.get_unchecked(1).unwrap(), &899_000)
+        client.price(&assets.get_unchecked(1), &899_000)
     });
     assert_ne!(result, None);
     assert_eq!(
@@ -229,8 +232,8 @@ fn get_x_last_price_test() {
     //check last x price
     let result = env.as_contract(&contract, || {
         client.x_last_price(
-            &assets.get_unchecked(1).unwrap(),
-            &assets.get_unchecked(2).unwrap(),
+            &assets.get_unchecked(1),
+            &assets.get_unchecked(2),
         )
     });
     assert_ne!(result, None);
@@ -267,8 +270,8 @@ fn get_x_price_test() {
     //check last prices
     let mut result = env.as_contract(&contract, || {
         client.x_last_price(
-            &assets.get_unchecked(1).unwrap(),
-            &assets.get_unchecked(2).unwrap(),
+            &assets.get_unchecked(1),
+            &assets.get_unchecked(2),
         )
     });
     assert_ne!(result, None);
@@ -283,8 +286,8 @@ fn get_x_price_test() {
     //check price at 899_000
     result = env.as_contract(&contract, || {
         client.x_price(
-            &assets.get_unchecked(1).unwrap(),
-            &assets.get_unchecked(2).unwrap(),
+            &assets.get_unchecked(1),
+            &assets.get_unchecked(2),
             &899_000,
         )
     });
@@ -320,7 +323,7 @@ fn twap_test() {
     let contract = deposit_random_contract(&env, &client.address, 200);
 
     let result = env.as_contract(&contract, || {
-        client.twap(&assets.get_unchecked(1).unwrap(), &2)
+        client.twap(&assets.get_unchecked(1), &2)
     });
 
     assert_ne!(result, None);
@@ -350,8 +353,8 @@ fn x_twap_test() {
 
     let result = env.as_contract(&contract, || {
         client.x_twap(
-            &assets.get_unchecked(1).unwrap(),
-            &assets.get_unchecked(2).unwrap(),
+            &assets.get_unchecked(1),
+            &assets.get_unchecked(2),
             &2,
         )
     });
@@ -379,7 +382,7 @@ fn get_non_registered_asset_price_test() {
     result = env.as_contract(&contract, || {
         client.x_last_price(
             &Asset::Stellar(Address::random(&env)),
-            &config_data.assets.get_unchecked(1).unwrap(),
+            &config_data.assets.get_unchecked(1),
         )
     });
     assert_eq!(result, None);
@@ -387,7 +390,7 @@ fn get_non_registered_asset_price_test() {
     //try to get price for unknown quote asset
     result = env.as_contract(&contract, || {
         client.x_last_price(
-            &config_data.assets.get_unchecked(1).unwrap(),
+            &config_data.assets.get_unchecked(1),
             &Asset::Stellar(Address::random(&env)),
         )
     });
@@ -410,7 +413,7 @@ fn get_asset_price_for_invalid_timestamp_test() {
     let contract = deposit_random_contract(&env, &client.address, 400);
 
     let mut result = env.as_contract(&contract, || {
-        client.price(&config_data.assets.get_unchecked(1).unwrap(), &u64::MAX)
+        client.price(&config_data.assets.get_unchecked(1), &u64::MAX)
     });
     assert_eq!(result, None);
 

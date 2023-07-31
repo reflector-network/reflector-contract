@@ -4,8 +4,11 @@ mod test;
 
 use shared::price_oracle::PriceOracle;
 use shared::types::asset::Asset;
+use shared::types::price_update_item::PriceUpdateItem;
 use shared::types::{config_data::ConfigData, price_data::PriceData};
-use soroban_sdk::{contractimpl, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+
+#[contract]
 pub struct PriceOracleContract;
 
 #[contractimpl]
@@ -51,7 +54,7 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the prices are invalid.
-    pub fn set_price(e: Env, user: Address, updates: Vec<i128>, timestamp: u64) {
+    pub fn set_price(e: Env, user: Address, updates: Vec<PriceUpdateItem>, timestamp: u64) {
         PriceOracle::set_price(&e, user, updates, timestamp)
     }
 

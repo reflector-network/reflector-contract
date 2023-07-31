@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contractimpl, Address, Env, Vec};
+use soroban_sdk::{contractimpl, Address, Env, Vec, contract};
 
 /// Import the price oracle contract
 mod oracle {
@@ -9,6 +9,7 @@ mod oracle {
 
 use oracle::{Client as PriceOracleClient, PriceData, Asset};
 
+#[contract]
 pub struct PriceOracleConsumerContract;
 
 #[contractimpl]

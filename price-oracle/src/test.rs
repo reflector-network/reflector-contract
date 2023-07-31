@@ -48,10 +48,13 @@ fn generate_assets(e: &Env, count: usize) -> Vec<Asset> {
     assets
 }
 
-fn get_updates(env: &Env, assets: Vec<Asset>, price: i128) -> Vec<i128> {
+fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<PriceUpdateItem> {
     let mut updates = Vec::new(&env);
-    for _ in assets.iter() {
-        updates.push_back(price);
+    for asset in assets.iter() {
+        updates.push_back(PriceUpdateItem {
+            asset: asset.clone(),
+            price
+        });
     }
     updates
 }
@@ -87,7 +90,7 @@ fn last_price_test() {
     let assets = init_data.assets;
 
     let timestamp = 600_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(100));
+    let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
 
@@ -95,13 +98,13 @@ fn last_price_test() {
     client.set_price(&admin, &updates, &timestamp);
 
     let timestamp = 900_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(200));
+    let updates = get_updates(&env, &&assets, normalize_price(200));
 
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
     //check last prices
-    let result = client.lastprice(&assets.get_unchecked(1).unwrap());
+    let result = client.lastprice(&assets.get_unchecked(1));
     assert_ne!(result, None);
     assert_eq!(
         result,
@@ -120,19 +123,19 @@ fn get_price_test() {
     let assets = init_data.assets;
 
     let timestamp = 600_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(100));
+    let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
 
     client.set_price(&admin, &updates, &timestamp);
 
     let timestamp = 900_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(200));
+    let updates = get_updates(&env, &assets, normalize_price(200));
 
     client.set_price(&admin, &updates, &timestamp);
 
     //check last prices
-    let mut result = client.lastprice(&assets.get_unchecked(1).unwrap());
+    let mut result = client.lastprice(&assets.get_unchecked(1));
     assert_ne!(result, None);
     assert_eq!(
         result,
@@ -143,7 +146,7 @@ fn get_price_test() {
     );
 
     //check price at 899_000
-    result = client.price(&assets.get_unchecked(1).unwrap(), &899_000);
+    result = client.price(&assets.get_unchecked(1), &899_000);
     assert_ne!(result, None);
     assert_eq!(
         result,
@@ -162,7 +165,7 @@ fn get_x_last_price_test() {
     let assets = init_data.assets;
 
     let timestamp = 600_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(100));
+    let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
 
@@ -170,8 +173,8 @@ fn get_x_last_price_test() {
 
     //check last x price
     let result = client.x_last_price(
-        &assets.get_unchecked(1).unwrap(),
-        &assets.get_unchecked(2).unwrap(),
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
     );
     assert_ne!(result, None);
     assert_eq!(
@@ -191,7 +194,7 @@ fn get_x_price_test() {
     let assets = init_data.assets;
 
     let timestamp = 600_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(100));
+    let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
 
@@ -199,15 +202,15 @@ fn get_x_price_test() {
     client.set_price(&admin, &updates, &timestamp);
 
     let timestamp = 900_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(200));
+    let updates = get_updates(&env, &assets, normalize_price(200));
 
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
     //check last prices
     let mut result = client.x_last_price(
-        &assets.get_unchecked(1).unwrap(),
-        &assets.get_unchecked(2).unwrap(),
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
     );
     assert_ne!(result, None);
     assert_eq!(
@@ -220,8 +223,8 @@ fn get_x_price_test() {
 
     //check price at 899_000
     result = client.x_price(
-        &assets.get_unchecked(1).unwrap(),
-        &assets.get_unchecked(2).unwrap(),
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
         &899_000,
     );
     assert_ne!(result, None);
@@ -242,7 +245,7 @@ fn twap_test() {
     let assets = init_data.assets;
 
     let timestamp = 600_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(100));
+    let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
 
@@ -250,12 +253,12 @@ fn twap_test() {
     client.set_price(&admin, &updates, &timestamp);
 
     let timestamp = 900_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(200));
+    let updates = get_updates(&env, &assets, normalize_price(200));
 
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
-    let result = client.twap(&assets.get_unchecked(1).unwrap(), &2);
+    let result = client.twap(&assets.get_unchecked(1), &2);
 
     assert_ne!(result, None);
     assert_eq!(result.unwrap(), normalize_price(150));
@@ -269,7 +272,7 @@ fn x_twap_test() {
     let assets = init_data.assets;
 
     let timestamp = 600_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(100));
+    let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
 
@@ -277,14 +280,14 @@ fn x_twap_test() {
     client.set_price(&admin, &updates, &timestamp);
 
     let timestamp = 900_000;
-    let updates = get_updates(&env, assets.clone(), normalize_price(200));
+    let updates = get_updates(&env, &assets, normalize_price(200));
 
     //set prices for assets
     client.set_price(&admin, &updates, &timestamp);
 
     let result = client.x_twap(
-        &assets.get_unchecked(1).unwrap(),
-        &assets.get_unchecked(2).unwrap(),
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
         &2,
     );
 
@@ -305,11 +308,11 @@ fn get_non_registered_asset_price_test() {
     assert_eq!(result, None);
 
     //try to get price for unknown base asset
-    result = client.x_last_price(&Asset::Stellar(Address::random(&env)), &config_data.assets.get_unchecked(1).unwrap());
+    result = client.x_last_price(&Asset::Stellar(Address::random(&env)), &config_data.assets.get_unchecked(1));
     assert_eq!(result, None);
 
     //try to get price for unknown quote asset
-    result = client.x_last_price(&config_data.assets.get_unchecked(1).unwrap(), &Asset::Stellar(Address::random(&env)));
+    result = client.x_last_price(&config_data.assets.get_unchecked(1), &Asset::Stellar(Address::random(&env)));
     assert_eq!(result, None);
 
     //try to get price for both unknown assets
@@ -322,7 +325,7 @@ fn get_asset_price_for_invalid_timestamp_test() {
     let (env, client, config_data) = init_contract_with_admin();
 
     
-    let mut result = client.price(&config_data.assets.get_unchecked(1).unwrap(), &u64::MAX);
+    let mut result = client.price(&config_data.assets.get_unchecked(1), &u64::MAX);
     assert_eq!(result, None);
 
     //try to get price for unknown asset
@@ -337,7 +340,7 @@ fn unauthorized_test() {
 
     let assets = init_data.assets;
 
-    let updates = get_updates(&env, assets, 100);
+    let updates = get_updates(&env, &assets, 100);
 
     let account = Address::random(&env);
     let timestamp = (112331 as u64).get_normalized_timestamp(Constants::RESOLUTION as u64);

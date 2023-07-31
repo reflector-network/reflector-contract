@@ -4,7 +4,7 @@ use super::asset::Asset;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AssetPriceKey {
+pub struct PriceUpdateItem {
     pub asset: Asset,
-    pub timestamp: u64,
+    pub price: i128,
 }
