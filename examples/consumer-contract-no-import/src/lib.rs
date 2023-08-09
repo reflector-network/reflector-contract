@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, FromVal,
-    RawVal, Symbol, Vec,
+    contracterror, contractimpl, contracttype, symbol_short, panic_with_error, Address, Env, Symbol, Vec, contract, Val, FromVal
 };
 
 /// PriceData is a struct that contains the price and timestamp and can be mapped to the price oracle contract type
@@ -11,6 +10,14 @@ use soroban_sdk::{
 pub struct PriceData {
     pub price: i128,
     pub timestamp: u64,
+}
+
+/// Asset is a enum that contains the supported assets and can be mapped to the price oracle contract type
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Asset {
+   Stellar(Address),
+   Generic(Symbol)
 }
 
 /// Error is a enum that contains the error codes that can be returned by the price oracle contract
@@ -23,6 +30,7 @@ pub enum Error {
     CustomInsufficientBalance = 113,
 }
 
+#[contract]
 pub struct PriceOracleConsumerContract;
 
 #[contractimpl]
@@ -37,8 +45,8 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `Address` - the admin address of the price oracle contract
-    pub fn admin(e: Env, contract_id: BytesN<32>) -> Address {
-        e.invoke_contract(&contract_id, &Symbol::short("admin"), Vec::new(&e))
+    pub fn admin(e: Env, contract_id: Address) -> Address {
+        e.invoke_contract(&contract_id, &symbol_short!("admin"), Vec::new(&e))
     }
 
     /// Returns the base asset of the price oracle contract
@@ -49,9 +57,9 @@ impl PriceOracleConsumerContract {
     /// 
     /// # Returns
     /// 
-    /// * `Address` - the base asset of the price oracle contract
-    pub fn base(e: Env, contract_id: BytesN<32>) -> Address {
-        e.invoke_contract(&contract_id, &Symbol::short("base"), Vec::new(&e))
+    /// * `Asset` - the base asset of the price oracle contract
+    pub fn base(e: Env, contract_id: Address) -> Asset {
+        e.invoke_contract(&contract_id, &symbol_short!("base"), Vec::new(&e))
     }
 
     /// Returns the decimals of the price oracle contract
@@ -63,8 +71,8 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `u32` - the decimals of the price oracle contract
-    pub fn decimals(e: Env, contract_id: BytesN<32>) -> u32 {
-        e.invoke_contract(&contract_id, &Symbol::short("decimals"), Vec::new(&e))
+    pub fn decimals(e: Env, contract_id: Address) -> u32 {
+        e.invoke_contract(&contract_id, &symbol_short!("decimals"), Vec::new(&e))
     }
 
     /// Returns the prices resolution of the price oracle contract
@@ -76,8 +84,8 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `u32` - the prices resolution of the price oracle contract
-    pub fn resolution(e: Env, contract_id: BytesN<32>) -> u32 {
-        e.invoke_contract(&contract_id, &Symbol::short("resolution"), Vec::new(&e))
+    pub fn resolution(e: Env, contract_id: Address) -> u32 {
+        e.invoke_contract(&contract_id, &Symbol::new(&e, "resolution"), Vec::new(&e))
     }
 
     /// Returns the retention period of the price oracle contract
@@ -89,8 +97,8 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `u64` - the retention period of the price oracle contract
-    pub fn period(e: Env, contract_id: BytesN<32>) -> Option<u64> {
-        e.invoke_contract(&contract_id, &Symbol::short("period"), Vec::new(&e))
+    pub fn period(e: Env, contract_id: Address) -> Option<u64> {
+        e.invoke_contract(&contract_id, &symbol_short!("period"), Vec::new(&e))
     }
 
     /// Returns the supported assets of the price oracle contract
@@ -102,8 +110,8 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `Vec<Address>` - the assets of the price oracle contract
-    pub fn assets(e: Env, contract_id: BytesN<32>) -> Option<Vec<Address>> {
-        e.invoke_contract(&contract_id, &Symbol::short("assets"), Vec::new(&e))
+    pub fn assets(e: Env, contract_id: Address) -> Option<Vec<Address>> {
+        e.invoke_contract(&contract_id, &symbol_short!("assets"), Vec::new(&e))
     }
 
     /// Returns the price of the asset at the given timestamp that is stored in the price oracle contract
@@ -123,15 +131,15 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn price(
         e: Env,
-        contract_id: BytesN<32>,
-        asset: Address,
+        contract_id: Address,
+        asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
-        let args: Vec<RawVal> =
-            Vec::from_array(&e, [asset.to_raw(), RawVal::from_val(&e, &timestamp)]);
+        let args: Vec<Val> =
+            Vec::from_array(&e, [Val::from_val(&e, &asset), Val::from_val(&e, &timestamp)]);
         match e.try_invoke_contract::<Option<PriceData>, Error>(
             &contract_id,
-            &Symbol::short("price"),
+            &symbol_short!("price"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -159,11 +167,11 @@ impl PriceOracleConsumerContract {
     /// # Panics
     /// 
     /// * If the contract call fails or the contract returns an error
-    pub fn lastprice(e: Env, contract_id: BytesN<32>, asset: Address) -> Option<PriceData> {
-        let args: Vec<RawVal> = Vec::from_array(&e, [asset.to_raw()]);
+    pub fn lastprice(e: Env, contract_id: Address, asset: Asset) -> Option<PriceData> {
+        let args: Vec<Val> = Vec::from_array(&e, [Val::from_val(&e, &asset)]);
         match e.try_invoke_contract::<Option<PriceData>, Error>(
             &contract_id,
-            &Symbol::short("lastprice"),
+            &symbol_short!("lastprice"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -195,22 +203,22 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_price(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
-        let args: Vec<RawVal> = Vec::from_array(
+        let args: Vec<Val> = Vec::from_array(
             &e,
             [
-                base_asset.to_raw(),
-                quote_asset.to_raw(),
-                RawVal::from_val(&e, &timestamp),
+                Val::from_val(&e, &base_asset),
+                Val::from_val(&e, &quote_asset),
+                Val::from_val(&e, &timestamp),
             ],
         );
         match e.try_invoke_contract::<Option<PriceData>, Error>(
             &contract_id,
-            &Symbol::short("x_price"),
+            &symbol_short!("x_price"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -241,14 +249,14 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_last_price(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
     ) -> Option<PriceData> {
-        let args: Vec<RawVal> = Vec::from_array(&e, [base_asset.to_raw(), quote_asset.to_raw()]);
+        let args: Vec<Val> = Vec::from_array(&e, [Val::from_val(&e, &base_asset), Val::from_val(&e, &quote_asset)]);
         match e.try_invoke_contract::<Option<PriceData>, Error>(
             &contract_id,
-            &Symbol::short("x_last_price"),
+            &Symbol::new(&e, "x_last_price"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -279,15 +287,15 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn prices(
         e: Env,
-        contract_id: BytesN<32>,
-        asset: Address,
+        contract_id: Address,
+        asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
-        let args: Vec<RawVal> =
-            Vec::from_array(&e, [asset.to_raw(), RawVal::from_val(&e, &records)]);
+        let args: Vec<Val> =
+            Vec::from_array(&e, [Val::from_val(&e, &asset), Val::from_val(&e, &records)]);
         match e.try_invoke_contract::<Option<Vec<PriceData>>, Error>(
             &contract_id,
-            &Symbol::short("prices"),
+            &symbol_short!("prices"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -319,22 +327,22 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_prices(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
-        let args: Vec<RawVal> = Vec::from_array(
+        let args: Vec<Val> = Vec::from_array(
             &e,
             [
-                base_asset.to_raw(),
-                quote_asset.to_raw(),
-                RawVal::from_val(&e, &records),
+                Val::from_val(&e, &base_asset),
+                Val::from_val(&e, &quote_asset),
+                Val::from_val(&e, &records),
             ],
         );
         match e.try_invoke_contract::<Option<Vec<PriceData>>, Error>(
             &contract_id,
-            &Symbol::short("x_prices"),
+            &symbol_short!("x_prices"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -363,12 +371,12 @@ impl PriceOracleConsumerContract {
     /// # Panics
     /// 
     /// * If the contract call fails or the contract returns an error
-    pub fn twap(e: Env, contract_id: BytesN<32>, asset: Address, records: u32) -> Option<i128> {
-        let args: Vec<RawVal> =
-            Vec::from_array(&e, [asset.to_raw(), RawVal::from_val(&e, &records)]);
+    pub fn twap(e: Env, contract_id: Address, asset: Asset, records: u32) -> Option<i128> {
+        let args: Vec<Val> =
+            Vec::from_array(&e, [Val::from_val(&e, &asset), Val::from_val(&e, &records)]);
         match e.try_invoke_contract::<Option<i128>, Error>(
             &contract_id,
-            &Symbol::short("twap"),
+            &symbol_short!("twap"),
             args,
         ) {
             Ok(result) => result.unwrap(),
@@ -400,22 +408,22 @@ impl PriceOracleConsumerContract {
     /// * If the contract call fails or the contract returns an error
     pub fn x_twap(
         e: Env,
-        contract_id: BytesN<32>,
-        base_asset: Address,
-        quote_asset: Address,
+        contract_id: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
         records: u32,
     ) -> Option<i128> {
-        let args: Vec<RawVal> = Vec::from_array(
+        let args: Vec<Val> = Vec::from_array(
             &e,
             [
-                base_asset.to_raw(),
-                quote_asset.to_raw(),
-                RawVal::from_val(&e, &records),
+                Val::from_val(&e, &base_asset),
+                Val::from_val(&e, &quote_asset),
+                Val::from_val(&e, &records),
             ],
         );
         match e.try_invoke_contract::<Option<i128>, Error>(
             &contract_id,
-            &Symbol::short("x_twap"),
+            &symbol_short!("x_twap"),
             args,
         ) {
             Ok(result) => result.unwrap(),

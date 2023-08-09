@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, BytesN};
+use soroban_sdk::{contracttype, Address};
 
 use super::asset_price_key::AssetPriceKey;
 
@@ -10,5 +10,5 @@ pub enum DataKey {
     RetentionPeriod,
     Assets,
     BaseFee,
-    Balance(BytesN<32>)
+    Balance(Address)
 }

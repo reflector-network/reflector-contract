@@ -8,7 +8,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-soroban-auth = { workspace = true }
 
 [features]
 test_mode = []

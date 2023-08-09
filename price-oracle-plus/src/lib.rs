@@ -5,16 +5,14 @@ mod extensions;
 
 use shared::constants::Constants;
 use shared::price_oracle::PriceOracle;
-use shared::extensions::{env_extensions::EnvExtensions};
+use shared::extensions::env_extensions::EnvExtensions;
 use shared::types::asset::Asset;
+use shared::types::price_update_item::PriceUpdateItem;
 use shared::types::{error::Error, config_data::ConfigData, price_data::PriceData};
 use extensions::env_balance_extensions::EnvBalanceExtensions;
-use soroban_sdk::{contractimpl, panic_with_error, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec, token};
 
-mod token {
-    soroban_sdk::contractimport!(file = "../soroban_token_spec.wasm");
-}
-
+#[contract]
 pub struct PriceOracleContract;
 
 #[contractimpl]
@@ -77,7 +75,7 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the prices are invalid.
-    pub fn set_price(e: Env, user: Address, updates: Vec<i128>, timestamp: u64) {
+    pub fn set_price(e: Env, user: Address, updates: Vec<PriceUpdateItem>, timestamp: u64) {
         PriceOracle::set_price(&e, user, updates, timestamp)
     }
 
@@ -97,7 +95,7 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the amount is invalid, or if the fee asset is invalid, or if transfer fails.
-    pub fn deposit(e: Env, user: Address, account: BytesN<32>, asset: Address, amount: i128) {
+    pub fn deposit(e: Env, user: Address, account: Address, asset: Address, amount: i128) {
         user.require_auth();
         if amount <= 0 {
             panic_with_error!(&e, Error::InvalidDepositAmount);
@@ -106,13 +104,13 @@ impl PriceOracleContract {
         if fee_asset != asset {
             panic_with_error!(&e, Error::InvalidFeeAsset);
         }
-        let token = token::Client::new(&e, &asset.contract_id().unwrap());
-        token.xfer(&user, &e.current_contract_address(), &amount);
+        let token = token::Client::new(&e, &asset);
+        token.transfer(&user, &e.current_contract_address(), &amount);
         e.try_inc_balance(account, amount);
     }
 
     /// Returns the balance of the given account.
-    pub fn balance(e: Env, account: BytesN<32>) -> Option<i128> {
+    pub fn balance(e: Env, account: Address) -> Option<i128> {
         e.get_balance(account)
     }
 
@@ -388,10 +386,10 @@ impl PriceOracleContract {
 
 fn fee_asset(e: &Env) -> Address {
     let bytes = BytesN::from_array(e, &Constants::FEE_ASSET);
-    Address::from_contract_id(&e, &bytes)
+    Address::from_contract_id(&bytes)
 }
 
-fn get_invoker_or_panic(e: &Env) -> BytesN<32> {
+fn get_invoker_or_panic(e: &Env) -> Address {
     let invoker = e.invoker();
     if invoker.is_none() {
         panic_with_error!(e, Error::Unauthorized)
@@ -399,7 +397,7 @@ fn get_invoker_or_panic(e: &Env) -> BytesN<32> {
     invoker.unwrap()
 }
 
-fn charge_or_panic(e: &Env, account: BytesN<32>, multiplier: u32) {
+fn charge_or_panic(e: &Env, account: Address, multiplier: u32) {
     let base_fee = e.get_base_fee().unwrap_or_else(||0);
     let amount = -(base_fee * multiplier as i128);
     if !e.try_inc_balance(account, amount) { 
