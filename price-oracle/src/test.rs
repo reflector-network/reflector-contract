@@ -23,6 +23,7 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         admin: admin.clone(),
         period: (100 * resolution).into(),
         assets: generate_assets(&env, 10),
+        version: 1,
         base_fee: 0,
     };
 
@@ -80,6 +81,9 @@ fn init_test() {
 
     let assets = client.assets();
     assert_eq!(assets, init_data.assets);
+
+    let config_version = client.config_version();
+    assert_eq!(config_version, init_data.version);
 }
 
 #[test]
@@ -113,6 +117,30 @@ fn last_price_test() {
             timestamp: 900_000 as u64
         })
     );
+}
+
+#[test]
+fn last_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let mut result = client.last_timestamp();
+
+    assert_eq!(result, 0);
+
+    let timestamp = 600_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+    
+    result = client.last_timestamp();
+
+    assert_eq!(result, 600_000);
 }
 
 #[test]

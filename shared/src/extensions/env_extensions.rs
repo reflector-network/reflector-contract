@@ -14,6 +14,10 @@ use types::{
 pub trait EnvExtensions {
     fn is_authorized(&self, invoker: &Address) -> bool;
 
+    fn get_config_version(&self) -> u32;
+
+    fn set_config_version(&self, version: u32);
+
     fn get_admin(&self) -> Address;
 
     fn set_admin(&self, admin: &Address);
@@ -22,7 +26,7 @@ pub trait EnvExtensions {
 
     fn set_price(&self, asset: Asset, price: i128, timestamp: u64);
 
-    fn get_last_timestamp(&self) -> Option<u64>;
+    fn get_last_timestamp(&self) -> u64;
 
     fn set_last_timestamp(&self, timestamp: u64);
 
@@ -80,6 +84,22 @@ impl EnvExtensions for Env {
         self.storage().persistent().set(&DataKey::Admin, admin);
     }
 
+    fn get_config_version(&self) -> u32 {
+        if !self.storage().persistent().has(&DataKey::ConfigVersion) {
+            return 0;
+        }
+        self.storage()
+            .persistent()
+            .get(&DataKey::ConfigVersion)
+            .unwrap()
+    }
+
+    fn set_config_version(&self, version: u32) {
+        self.storage()
+            .persistent()
+            .set(&DataKey::ConfigVersion, &version);
+    }
+
     fn get_price(&self, asset: Asset, timestamp: u64) -> Option<i128> {
         //build the key for the price
         let data_key = DataKey::Price(AssetPriceKey { asset, timestamp });
@@ -104,23 +124,23 @@ impl EnvExtensions for Env {
         self.storage().persistent().set(&data_key, &price);
     }
 
-    fn get_last_timestamp(&self) -> Option<u64> {
+    fn get_last_timestamp(&self) -> u64 {
         //check if the marker is available
         if !self.storage().persistent().has(&DataKey::LastTimestamp) {
-            return None;
+            return 0;
         }
 
         //get the marker
-        Some(
-            self.storage()
+        self.storage()
             .persistent()
-                .get(&DataKey::LastTimestamp)
-                .unwrap(),
-        )
+            .get(&DataKey::LastTimestamp)
+            .unwrap()
     }
 
     fn set_last_timestamp(&self, timestamp: u64) {
-        self.storage().persistent().set(&DataKey::LastTimestamp, &timestamp);
+        self.storage()
+            .persistent()
+            .set(&DataKey::LastTimestamp, &timestamp);
     }
 
     fn get_retention_period(&self) -> Option<u64> {
@@ -150,9 +170,7 @@ impl EnvExtensions for Env {
     }
 
     fn set_assets(&self, assets: Vec<Asset>) {
-        self.storage()
-            .persistent()
-            .set(&DataKey::Assets, &assets);
+        self.storage().persistent().set(&DataKey::Assets, &assets);
     }
 
     fn get_prices(&self, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
@@ -245,7 +263,7 @@ fn prices<F: Fn(u64) -> Option<i128>>(
     records: u32,
 ) -> Option<Vec<PriceData>> {
     //check if the asset is valid
-    let mut timestamp = e.get_last_timestamp().unwrap_or(0);
+    let mut timestamp = e.get_last_timestamp();
     if timestamp == 0 {
         return None;
     }

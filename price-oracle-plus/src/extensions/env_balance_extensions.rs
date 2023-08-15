@@ -2,9 +2,7 @@ use soroban_sdk::{Address, Env};
 
 
 
-use shared::types::{
-    data_key::DataKey,
-};
+use shared::types::data_key::DataKey;
 
 pub trait EnvBalanceExtensions {
     fn get_base_fee(&self) -> Option<i128>;

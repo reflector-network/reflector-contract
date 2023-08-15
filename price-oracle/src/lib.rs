@@ -29,6 +29,15 @@ impl PriceOracleContract {
         PriceOracle::config(&e, user, config)
     }
 
+    /// Returns the configuration version of the contract.
+    /// 
+    /// # Returns
+    /// 
+    /// The configuration version.
+    pub fn config_version(e: Env) -> u32 {
+        PriceOracle::config_version(&e)
+    }
+
     /// Adds the given assets to the contract. Can only be called by the admin.
     /// 
     /// # Arguments
@@ -112,6 +121,15 @@ impl PriceOracleContract {
     /// The assets supported by the contract or None if no assets are supported.
     pub fn assets(e: Env) -> Vec<Asset> {
         PriceOracle::assets(&e)
+    }
+
+    /// Returns the timestamp of the last price update.
+    /// 
+    /// # Returns
+    /// 
+    /// The timestamp of the last price update.
+    pub fn last_timestamp(e: Env) -> u64 {
+        PriceOracle::last_timestamp(&e)
     }
 
     /// Returns the prices for the given asset at the given timestamp.

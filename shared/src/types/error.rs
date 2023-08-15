@@ -6,14 +6,12 @@ use soroban_sdk::contracterror;
 pub enum Error {
     /// The caller is not authorized to perform the operation.
     Unauthorized = 1,
+    /// The config assets doen't contain persistent asset. Delete assets is not supported.
+    AssetMissing = 2,
     /// The asset is already added to the contract's list of supported assets.
     AssetAlreadyPresented = 3,
-    /// The updates length is not equal to the number of supported assets.
-    InvalidUpdatesLength = 4,
-    /// The price value is invalid (not i128)
-    InvalidPriceValue = 5,
-    /// If update price is 0, and there is no previous price
-    NoPrevPrice = 6,
+    /// The config version is invalid
+    InvalidConfigVersion = 4,
     /// Deposit in unsupported asset
     InvalidFeeAsset = 11,
     /// Deposit amount has negative value

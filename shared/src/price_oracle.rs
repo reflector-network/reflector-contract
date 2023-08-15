@@ -1,6 +1,7 @@
 use crate::constants::Constants;
 use crate::extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
 use crate::types::asset::Asset;
+use crate::types::data_key::DataKey;
 use crate::types::price_update_item::PriceUpdateItem;
 use crate::types::{config_data::ConfigData, error::Error, price_data::PriceData};
 use soroban_sdk::{panic_with_error, Address, Env, Vec};
@@ -14,9 +15,20 @@ impl PriceOracle {
         if e.is_initialized() {
             e.panic_if_not_admin(&user);
         }
-
+        let config_version = e.get_config_version();
+        if config.version != config_version + 1 {
+            panic_with_error!(&e, Error::InvalidConfigVersion);
+        }
+        e.set_config_version(config.version);
         e.set_admin(&config.admin);
         e.set_retention_period(config.period);
+
+        let presented_assets = e.get_assets();
+        for asset in presented_assets {
+            if !config.assets.contains(asset) {
+                panic_with_error!(&e, Error::AssetMissing);
+            }
+        }
         e.set_assets(config.assets);
     }
 
@@ -52,7 +64,7 @@ impl PriceOracle {
             //remove the old price
             e.try_delete_old_price(update.asset, timestamp, retention_period);
         }
-        if last_timestamp.is_none() || timestamp > last_timestamp.unwrap() {
+        if timestamp > last_timestamp {
             e.set_last_timestamp(timestamp);
         }
     }
@@ -61,6 +73,10 @@ impl PriceOracle {
 
     pub fn admin(e: &Env) -> Address {
         e.get_admin()
+    }
+
+    pub fn config_version(e: &Env) -> u32 {
+        e.get_config_version()
     }
 
     pub fn base(e: &Env) -> Asset {
@@ -84,6 +100,10 @@ impl PriceOracle {
         e.get_assets()
     }
 
+    pub fn last_timestamp(e: &Env) -> u64 {
+        e.get_last_timestamp()
+    }
+
     pub fn price(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
 
@@ -103,7 +123,7 @@ impl PriceOracle {
     //Get the price for an asset.
     pub fn lastprice(e: &Env, asset: Asset) -> Option<PriceData> {
         //get the last timestamp
-        let timestamp = e.get_last_timestamp().unwrap_or(0);
+        let timestamp = e.get_last_timestamp();
         if timestamp == 0 {
             return None;
         }
@@ -141,7 +161,7 @@ impl PriceOracle {
     }
 
     pub fn x_last_price(e: &Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
-        let timestamp = e.get_last_timestamp().unwrap_or(0);
+        let timestamp = e.get_last_timestamp();
         if timestamp == 0 {
             return None;
         }
