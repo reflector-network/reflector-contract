@@ -8,7 +8,6 @@ use stellar_strkey;
 
 const DECIMAL_KEY: &str = "DECIMALS";
 const RESOLUTION_KEY: &str = "RESOLUTION";
-const ADMIN_KEY: &str = "ADMIN";
 const BASE_ASSET_TYPE: &str = "BASE_ASSET_TYPE";
 const BASE_KEY: &str = "BASE";
 
@@ -28,11 +27,6 @@ fn main() {
         RESOLUTION_KEY
     ));
 
-    let admin_str = env::var(ADMIN_KEY).expect(&format!(
-        "Please provide the {} environment variable with a valid Stellar address.",
-        ADMIN_KEY
-    ));
-
     let base_asset_type_str = env::var(BASE_ASSET_TYPE).expect(&format!(
         "Please provide the {} environment variable with a valid value. Please specify 0 for Stellar assets and 1 for Generic assets.",
         BASE_ASSET_TYPE
@@ -50,9 +44,6 @@ fn main() {
     let resolution: u32 = resolution_str
         .parse::<u32>()
         .expect("Invalid RESOLUTION value.");
-
-    let admin_bytes = string_public_key_to_bytes(&admin_str)
-        .unwrap_or_else(|e| panic!("Invalid Stellar address for ADMIN: {}", e));
 
     let base_asset_type = base_asset_type_str
         .parse::<u8>()
@@ -76,7 +67,6 @@ fn main() {
     write_u32_to_constants(&mut constants_content, DECIMAL_KEY, decimals);
     write_u32_to_constants(&mut constants_content, RESOLUTION_KEY, resolution);
     write_asset_type_to_constants(&mut constants_content, &base_asset_type);
-    write_array_to_constants(&mut constants_content, ADMIN_KEY, &admin_bytes);
     write_array_to_constants(&mut constants_content, BASE_KEY, &base_bytes);
     write_footer(&mut constants_content);
 
@@ -106,9 +96,9 @@ fn write_u32_to_constants(constants_content: &mut String, constant_name: &str, v
 
 fn write_asset_type_to_constants(constants_content: &mut String, asset_type: &u8) {
     let asset_type = if asset_type == &0 {
-        "AssetType::STELLAR"
+        "AssetType::S"
     } else {
-        "AssetType::GENERIC"
+        "AssetType::G"
     };
     writeln!(
         constants_content,

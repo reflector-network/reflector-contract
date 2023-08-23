@@ -4,7 +4,6 @@ mod test;
 
 use shared::price_oracle::PriceOracle;
 use shared::types::asset::Asset;
-use shared::types::price_update_item::PriceUpdateItem;
 use shared::types::{config_data::ConfigData, price_data::PriceData};
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
@@ -24,18 +23,9 @@ impl PriceOracleContract {
     /// 
     /// # Panics
     /// 
-    /// Panics if the caller is not the admin. 
+    /// Panics if the contract is already initialized, or if the version is invalid.
     pub fn config(e: Env, user: Address, config: ConfigData) {
         PriceOracle::config(&e, user, config)
-    }
-
-    /// Returns the configuration version of the contract.
-    /// 
-    /// # Returns
-    /// 
-    /// The configuration version.
-    pub fn config_version(e: Env) -> u32 {
-        PriceOracle::config_version(&e)
     }
 
     /// Adds the given assets to the contract. Can only be called by the admin.
@@ -44,12 +34,28 @@ impl PriceOracleContract {
     /// 
     /// * `user` - The admin address.
     /// * `assets` - The assets to add.
+    /// * `version` - The configuration version.
     /// 
     /// # Panics
     /// 
-    /// Panics if the caller is not the admin, or if the assets are already added.
-    pub fn add_assets(e: Env, user: Address, assets: Vec<Asset>) {
-        PriceOracle::add_assets(&e, user, assets)
+    /// Panics if the caller is not the admin, or if the assets are already added, or if the version is invalid.
+    pub fn add_assets(e: Env, user: Address, assets: Vec<Asset>, version: u32) {
+        PriceOracle::add_assets(&e, user, assets, version)
+    }
+
+    /// Sets the retention period for the prices. Can only be called by the admin.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `user` - The admin address.
+    /// * `period` - The retention period.
+    /// * `version` - The configuration version.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if the caller is not the admin, or if the period is invalid, or if the version is invalid.
+    pub fn set_period(e: Env, user: Address, period: u64, version: u32) {
+        PriceOracle::set_period(&e, user, period, version)
     }
 
     /// Sets the prices for the assets. Can only be called by the admin.
@@ -63,7 +69,7 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the prices are invalid.
-    pub fn set_price(e: Env, user: Address, updates: Vec<PriceUpdateItem>, timestamp: u64) {
+    pub fn set_price(e: Env, user: Address, updates: Vec<i128>, timestamp: u64) {
         PriceOracle::set_price(&e, user, updates, timestamp)
     }
 
@@ -76,6 +82,15 @@ impl PriceOracleContract {
     /// The admin address.
     pub fn admin(e: Env) -> Address {
         PriceOracle::admin(&e)
+    }
+
+    /// Returns the configuration version of the contract.
+    /// 
+    /// # Returns
+    /// 
+    /// The configuration version.
+    pub fn config_version(e: Env) -> u32 {
+        PriceOracle::config_version(&e)
     }
 
     /// Returns the base asset.

@@ -4,7 +4,7 @@ use soroban_sdk::{contractimpl, Address, Env, Vec, contract};
 
 /// Import the price oracle contract
 mod oracle {
-    soroban_sdk::contractimport!(file = "./se_price_oracle.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32-unknown-unknown/release/se_price_oracle.wasm");
 }
 
 use oracle::{Client as PriceOracleClient, PriceData, Asset};

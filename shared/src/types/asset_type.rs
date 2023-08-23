@@ -1,5 +1,6 @@
 #[derive(PartialEq)]
+#[repr(u8)]
 pub enum AssetType {
-    STELLAR = 0,
-    GENERIC = 1
+    S = 1,
+    G = 2
 }

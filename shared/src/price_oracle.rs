@@ -1,8 +1,6 @@
 use crate::constants::Constants;
 use crate::extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
 use crate::types::asset::Asset;
-use crate::types::data_key::DataKey;
-use crate::types::price_update_item::PriceUpdateItem;
 use crate::types::{config_data::ConfigData, error::Error, price_data::PriceData};
 use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
@@ -12,43 +10,52 @@ impl PriceOracle {
     //Admin section
 
     pub fn config(e: &Env, user: Address, config: ConfigData) {
+        user.require_auth();
         if e.is_initialized() {
-            e.panic_if_not_admin(&user);
+            e.panic_with_error(Error::AlreadyInitialized);
         }
-        let config_version = e.get_config_version();
-        if config.version != config_version + 1 {
-            panic_with_error!(&e, Error::InvalidConfigVersion);
-        }
-        e.set_config_version(config.version);
+        e.panic_if_version_invalid(config.version);
         e.set_admin(&config.admin);
         e.set_retention_period(config.period);
 
-        let presented_assets = e.get_assets();
-        for asset in presented_assets {
-            if !config.assets.contains(asset) {
-                panic_with_error!(&e, Error::AssetMissing);
-            }
-        }
-        e.set_assets(config.assets);
+        Self::__add_assets(e, config.assets);
+        e.set_config_version(config.version);
     }
 
-    pub fn add_assets(e: &Env, user: Address, assets: Vec<Asset>) {
+    pub fn add_assets(e: &Env, user: Address, assets: Vec<Asset>, version: u32) {
         e.panic_if_not_admin(&user);
+        e.panic_if_version_invalid(version);
+        Self::__add_assets(e, assets);
+        e.set_config_version(version);
+    }
 
+    fn __add_assets(e: &Env, assets: Vec<Asset>) {
         let mut presented_assets = e.get_assets();
 
+        let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(e);
         for asset in assets.iter() {
             //check if the asset is already added
             if is_asset_presented(&presented_assets, &asset) {
                 panic_with_error!(&e, Error::AssetAlreadyPresented);
             }
-            presented_assets.push_back(asset);
+            presented_assets.push_back(asset.clone());
+            assets_indexes.push_back((asset, presented_assets.len() as u32 - 1));
         }
 
         e.set_assets(presented_assets);
+        for (asset, index) in assets_indexes.iter() {
+            e.set_asset_index(asset, index);
+        }
     }
 
-    pub fn set_price(e: &Env, user: Address, updates: Vec<PriceUpdateItem>, timestamp: u64) {
+    pub fn set_period(e: &Env, user: Address, period: u64, version: u32) {
+        e.panic_if_not_admin(&user);
+        e.panic_if_version_invalid(version);
+        e.set_retention_period(period);
+        e.set_config_version(version);
+    }
+
+    pub fn set_price(e: &Env, user: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&user);
 
         let retention_period = e.get_retention_period().unwrap();
@@ -57,12 +64,13 @@ impl PriceOracle {
         let last_timestamp = e.get_last_timestamp();
 
         //iterate over the updates
-        for (_, update) in updates.iter().enumerate() {
+        for (i, price) in updates.iter().enumerate() {
+            let asset = i as u8;
             //store the new price
-            e.set_price(update.asset.clone(), update.price, timestamp);
+            e.set_price(asset, price, timestamp);
 
             //remove the old price
-            e.try_delete_old_price(update.asset, timestamp, retention_period);
+            e.try_delete_old_price(asset, timestamp, retention_period);
         }
         if timestamp > last_timestamp {
             e.set_last_timestamp(timestamp);
@@ -107,8 +115,12 @@ impl PriceOracle {
     pub fn price(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
 
+        let asset = e.get_asset_index(asset);
+        if asset.is_none() {
+            return None;
+        }
         //get the price
-        let price = e.get_price(asset, normalized_timestamp);
+        let price = e.get_price(asset.unwrap(), normalized_timestamp);
 
         if price.is_none() {
             return None;
@@ -128,8 +140,13 @@ impl PriceOracle {
             return None;
         }
 
+        let asset = e.get_asset_index(asset);
+        if asset.is_none() {
+            return None;
+        }
+
         //get the price
-        let price = e.get_price(asset, timestamp);
+        let price = e.get_price(asset.unwrap(), timestamp);
         if price.is_none() {
             return None;
         }
@@ -148,7 +165,17 @@ impl PriceOracle {
     ) -> Option<PriceData> {
         let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
 
-        let price = e.get_x_price(base_asset, quote_asset, normalized_timestamp);
+        let base_asset = e.get_asset_index(base_asset);
+        if base_asset.is_none() {
+            return None;
+        }
+
+        let quote_asset = e.get_asset_index(quote_asset);
+        if base_asset.is_none() {
+            return None;
+        }
+
+        let price = e.get_x_price(base_asset.unwrap(), quote_asset.unwrap(), normalized_timestamp);
 
         if price.is_none() {
             return None;
@@ -165,7 +192,18 @@ impl PriceOracle {
         if timestamp == 0 {
             return None;
         }
-        let price = e.get_x_price(base_asset, quote_asset, timestamp);
+
+        let base_asset = e.get_asset_index(base_asset);
+        if base_asset.is_none() {
+            return None;
+        }
+
+        let quote_asset = e.get_asset_index(quote_asset);
+        if quote_asset.is_none() {
+            return None;
+        }
+
+        let price = e.get_x_price(base_asset.unwrap(), quote_asset.unwrap(), timestamp);
 
         if price.is_none() {
             return None;
@@ -178,7 +216,11 @@ impl PriceOracle {
     }
 
     pub fn prices(e: &Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
-        e.get_prices(asset, records)
+        let asset = e.get_asset_index(asset);
+        if asset.is_none() {
+            return None;
+        }
+        e.get_prices(asset.unwrap(), records)
     }
 
     pub fn x_prices(
@@ -187,11 +229,23 @@ impl PriceOracle {
         quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
-        e.get_x_prices(base_asset, quote_asset, records)
+        let base_asset = e.get_asset_index(base_asset);
+        if base_asset.is_none() {
+            return None;
+        }
+        let quote_asset = e.get_asset_index(quote_asset);
+        if quote_asset.is_none() {
+            return None;
+        }
+        e.get_x_prices(base_asset.unwrap(), quote_asset.unwrap(), records)
     }
 
     pub fn twap(e: &Env, asset: Asset, records: u32) -> Option<i128> {
-        let prices_result: Option<Vec<PriceData>> = e.get_prices(asset, records);
+        let asset = e.get_asset_index(asset);
+        if asset.is_none() {
+            return None;
+        }
+        let prices_result: Option<Vec<PriceData>> = e.get_prices(asset.unwrap(), records);
         if prices_result.is_none() {
             return None;
         }
@@ -207,7 +261,15 @@ impl PriceOracle {
     }
 
     pub fn x_twap(e: &Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
-        let prices_result = e.get_x_prices(base_asset, quote_asset, records);
+        let base_asset = e.get_asset_index(base_asset);
+        if base_asset.is_none() {
+            return None;
+        }
+        let quote_asset = e.get_asset_index(quote_asset);
+        if quote_asset.is_none() {
+            return None;
+        }
+        let prices_result = e.get_x_prices(base_asset.unwrap(), quote_asset.unwrap(), records);
         if prices_result.is_none() {
             return None;
         }
