@@ -55,8 +55,8 @@ fn main() {
     let base_bytes = get_base_bytes(&base_str, &base_asset_type)
         .unwrap_or_else(|e| panic!("Invalid value for BASE: {}", e));
 
-    let constants_path = Path::new("../shared/src/constants.rs");
-    let backup_path = Path::new("../shared/src/constants.rs.bak");
+    let constants_path = Path::new("./src/constants.rs");
+    let backup_path = Path::new("./src/constants.rs.bak");
 
     // Backup existing constants.rs
     fs::copy(&constants_path, &backup_path).expect("Failed to backup constants.rs");
@@ -96,9 +96,9 @@ fn write_u32_to_constants(constants_content: &mut String, constant_name: &str, v
 
 fn write_asset_type_to_constants(constants_content: &mut String, asset_type: &u8) {
     let asset_type = if asset_type == &0 {
-        "AssetType::S"
+        "AssetType::Stellar"
     } else {
-        "AssetType::G"
+        "AssetType::Generic"
     };
     writeln!(
         constants_content,
@@ -144,7 +144,7 @@ fn get_base_bytes(base: &str, asset_type: &u8) -> std::io::Result<[u8; 32]> {
             if length > 32 {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "Asset code too long",
+                    "Asset code is too long",
                 ));
             }
             base_array[..length].copy_from_slice(base.as_bytes());

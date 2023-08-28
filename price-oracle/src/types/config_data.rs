@@ -13,8 +13,6 @@ pub struct ConfigData {
     pub period: u64,
     /// The assets supported by the contract.
     pub assets: Vec<Asset>,
-    /// The base fee.
-    pub base_fee: i128,
     /// The config version.
     pub version: u32
 }

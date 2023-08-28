@@ -52,15 +52,14 @@ fi
 
 # touch lib.rs and constants.rs to force a rebuild
 touch ./src/lib.rs
-touch ../shared/src/constants.rs
 # build the contract with the provided arguments
 DECIMALS="$DECIMALS" RESOLUTION="$RESOLUTION" BASE_ASSET_TYPE="$BASE_ASSET_TYPE" BASE="$BASE" cargo build --release --target wasm32-unknown-unknown
 
 # restore constants.rs
 # check if the backup file exists
-if [ -f "../shared/src/constants.rs.bak" ]; then
+if [ -f "./src/constants.rs.bak" ]; then
     # restore the original constants.rs file
-    mv "../shared/src/constants.rs.bak" "../shared/src/constants.rs"
+    mv "./src/constants.rs.bak" "./src/constants.rs"
     echo "Restored constants.rs from constants.rs.bak"
 else
     echo "Backup file constants.rs.bak not found. No restoration performed."

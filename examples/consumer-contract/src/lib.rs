@@ -24,7 +24,7 @@ impl PriceOracleConsumerContract {
     /// # Returns
     /// 
     /// * `Address` - the admin address of the price oracle contract
-    pub fn admin(e: Env, contract_id: Address) -> Address {
+    pub fn admin(e: Env, contract_id: Address) -> Option<Address> {
         let contract = PriceOracleClient::new(&e, &contract_id);
         contract.admin()
     }

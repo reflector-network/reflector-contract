@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["shared", "price-oracle", "examples\\consumer-contract", "examples\\consumer-contract-no-import"]
+members = ["price-oracle", "examples\\consumer-contract", "examples\\consumer-contract-no-import"]
 
 [profile.release-with-logs]
 inherits = "release"
