@@ -14,30 +14,18 @@ The contract optimizes on calls and storage by using constants for values that w
 
     ```bash
     cd ./price-oracle
-    # OR
-    cd ./price-oracle-plus
     ```
 
 2. Run the `build-wasm.sh` script with the appropriate parameters:
-
-    For `price-oracle`:
-
     ```bash
-    ./build-wasm.sh --decimals 14 --resolution 300000 --admin GDK...Y3N --base CCG...TY6
-    ```
-
-    For `price-oracle-plus`:
-
-    ```bash
-    ./build-wasm.sh --decimals 14 --resolution 300000 --admin GDK...Y3N --base CCG...TY6 --fee_asset CCG...TY6
+    ./build-wasm.sh --decimals 14 --resolution 300000 --base_asset_type 0 --base CCG...TY6
     ```
 
 ### Parameters
 
 - `--decimals`: Number of decimal places the asset uses.
 - `--resolution`: The frequency of price updates, specified in milliseconds.
-- `--admin`: The default administrator's public key.
-- `--base`: The base asset's contract address.
-- `--fee_asset`: The fee asset's contract address (only for Price Oracle Plus).
+- `--base_asset_type`: The base asset type. 0 for Stellar assets and 1 for Generic assets.
+- `--base`: The base asset's contract address or generic code.
 
 The script will replace the values for constants, compile the wasm file, and restore the previous constant values.

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["shared", "price-oracle", "price-oracle-plus", "examples\\consumer-contract", "examples\\consumer-contract-no-import"]
+members = ["price-oracle", "examples\\consumer-contract", "examples\\consumer-contract-no-import"]
 
 [profile.release-with-logs]
 inherits = "release"
@@ -18,10 +18,7 @@ codegen-units = 1
 lto = true
 
 [workspace.dependencies.soroban-sdk]
-version = "0.7.0"
-
-[workspace.dependencies.soroban-auth]
-version = "0.7.0"
+version = "0.9.2"
 
 [workspace.dependencies.hex]
 version = "0.4.3"
