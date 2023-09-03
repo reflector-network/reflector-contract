@@ -1,5 +1,5 @@
 [package]
-name = "se-price-oracle"
+name = "reflector-oracle"
 version = "1.4.3"
 edition = "2021"
 build = "build.rs"

@@ -1,5 +1,5 @@
 [package]
-name = "se-price-oracle-consumer-no-import"
+name = "reflector-oracle-consumer-no-import"
 version = "1.4.0"
 edition = "2021"
 
