@@ -10,17 +10,12 @@ use constants::Constants;
 use extensions::u128_helper::U128Helper;
 use types::{asset::Asset, asset_type::AssetType, error::Error};
 const ADMIN_KEY: &str = "admin";
-const CONFIG_VERSION: &str = "config_version";
 const LAST_TIMESTAMP: &str = "last_timestamp";
 const RETENTION_PERIOD: &str = "period";
 const ASSETS: &str = "assets";
 
 pub trait EnvExtensions {
     fn is_authorized(&self, invoker: &Address) -> bool;
-
-    fn get_config_version(&self) -> u32;
-
-    fn set_config_version(&self, version: u32);
 
     fn get_admin(&self) -> Option<Address>;
 
@@ -50,8 +45,6 @@ pub trait EnvExtensions {
 
     fn panic_if_not_admin(&self, invoker: &Address);
 
-    fn panic_if_version_invalid(&self, version: u32);
-
     fn get_base_asset(&self) -> Asset;
 
     fn is_initialized(&self) -> bool;
@@ -77,14 +70,6 @@ impl EnvExtensions for Env {
 
     fn set_admin(&self, admin: &Address) {
         get_storage(&self).set(&ADMIN_KEY, admin);
-    }
-
-    fn get_config_version(&self) -> u32 {
-        get_storage(&self).get(&CONFIG_VERSION).unwrap_or_default()
-    }
-
-    fn set_config_version(&self, version: u32) {
-        get_storage(&self).set(&CONFIG_VERSION, &version);
     }
 
     fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128> {
@@ -173,12 +158,6 @@ impl EnvExtensions for Env {
     fn panic_if_not_admin(&self, invoker: &Address) {
         if !self.is_authorized(invoker) {
             panic_with_error!(self, Error::Unauthorized);
-        }
-    }
-
-    fn panic_if_version_invalid(&self, version: u32) {
-        if version != self.get_config_version() + 1 {
-            panic_with_error!(self, Error::InvalidConfigVersion);
         }
     }
 

@@ -35,12 +35,10 @@ impl PriceOracleContract {
         if e.is_initialized() {
             e.panic_with_error(Error::AlreadyInitialized);
         }
-        e.panic_if_version_invalid(config.version);
         e.set_admin(&config.admin);
         e.set_retention_period(config.period);
 
         Self::__add_assets(&e, config.assets);
-        e.set_config_version(config.version);
     }
 
     fn __add_assets(e: &Env, assets: Vec<Asset>) {
@@ -73,11 +71,9 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the assets are already added, or if the version is invalid.
-    pub fn add_assets(e: Env, user: Address, assets: Vec<Asset>, version: u32) {
+    pub fn add_assets(e: Env, user: Address, assets: Vec<Asset>) {
         e.panic_if_not_admin(&user);
-        e.panic_if_version_invalid(version);
         Self::__add_assets(&e, assets);
-        e.set_config_version(version);
     }
 
     /// Sets the retention period for the prices. Can only be called by the admin.
@@ -91,11 +87,9 @@ impl PriceOracleContract {
     /// # Panics
     /// 
     /// Panics if the caller is not the admin, or if the period is invalid, or if the version is invalid.
-    pub fn set_period(e: Env, user: Address, period: u64, version: u32) {
+    pub fn set_period(e: Env, user: Address, period: u64) {
         e.panic_if_not_admin(&user);
-        e.panic_if_version_invalid(version);
         e.set_retention_period(period);
-        e.set_config_version(version);
     }
 
     /// Sets the prices for the assets. Can only be called by the admin.
@@ -140,15 +134,6 @@ impl PriceOracleContract {
     /// The admin address.
     pub fn admin(e: Env) -> Option<Address> {
         e.get_admin()
-    }
-
-    /// Returns the configuration version of the contract.
-    /// 
-    /// # Returns
-    /// 
-    /// The configuration version.
-    pub fn config_version(e: Env) -> u32 {
-        e.get_config_version()
     }
 
     /// Returns the base asset.

@@ -12,7 +12,5 @@ pub struct ConfigData {
     /// The retention period for the prices.
     pub period: u64,
     /// The assets supported by the contract.
-    pub assets: Vec<Asset>,
-    /// The config version.
-    pub version: u32
+    pub assets: Vec<Asset>
 }

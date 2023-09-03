@@ -22,8 +22,7 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
     let init_data = ConfigData {
         admin: admin.clone(),
         period: (100 * resolution).into(),
-        assets: generate_assets(&env, 10, 0),
-        version: 1,
+        assets: generate_assets(&env, 10, 0)
     };
 
     env.mock_all_auths();
@@ -79,9 +78,6 @@ fn init_test() {
 
     let assets = client.assets();
     assert_eq!(assets, init_data.assets);
-
-    let config_version = client.config_version();
-    assert_eq!(config_version, init_data.version);
 }
 
 #[test]
@@ -149,11 +145,9 @@ fn add_assets_test() {
 
     let assets = generate_assets(&env, 10, init_data.assets.len() - 1);
 
-    let current_version = client.config_version();
-
     env.mock_all_auths();
 
-    client.add_assets(&admin, &assets, &(current_version + 1));
+    client.add_assets(&admin, &assets);
 
     let result = client.assets();
 
@@ -173,24 +167,13 @@ fn set_period_test() {
 
     let period = 100_000;
 
-    let current_version = client.config_version();
-
     env.mock_all_auths();
 
-    client.set_period(&admin, &period, &(current_version + 1));
+    client.set_period(&admin, &period);
 
     let result = client.period().unwrap();
 
     assert_eq!(result, period);
-}
-
-#[test]
-fn config_version_test() {
-    let (__env, client, __init_data) = init_contract_with_admin();
-
-    let result = client.config_version();
-
-    assert_eq!(result, 1);
 }
 
 #[test]
