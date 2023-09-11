@@ -81,6 +81,13 @@ fn init_test() {
 }
 
 #[test]
+fn bump_test() {
+    let (_env, client, _init_data) = init_contract_with_admin();
+
+    client.bump(&6_000_000);
+}
+
+#[test]
 fn last_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
