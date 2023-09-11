@@ -41,6 +41,19 @@ impl PriceOracleContract {
         Self::__add_assets(&e, config.assets);
     }
 
+    /// Bumps the contract instance storage to the given number of ledgers.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `ledgers_to_live` - The number of ledgers to live.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if ledgers_to_live is invalid.
+    pub fn bump(e: Env, ledgers_to_live: u32) {
+        e.bump(ledgers_to_live);
+    }
+
     fn __add_assets(e: &Env, assets: Vec<Asset>) {
         let mut presented_assets = e.get_assets();
 
@@ -108,6 +121,8 @@ impl PriceOracleContract {
 
         let retention_period = e.get_retention_period().unwrap();
 
+        let ledgers_to_live: u32 = ((retention_period / 1000 / 5) + 1) as u32;
+
         //get the last timestamp
         let last_timestamp = e.get_last_timestamp();
 
@@ -115,10 +130,7 @@ impl PriceOracleContract {
         for (i, price) in updates.iter().enumerate() {
             let asset = i as u8;
             //store the new price
-            e.set_price(asset, price, timestamp);
-
-            //remove the old price
-            e.try_delete_old_price(asset, timestamp, retention_period);
+            e.set_price(asset, price, timestamp, ledgers_to_live);
         }
         if timestamp > last_timestamp {
             e.set_last_timestamp(timestamp);
