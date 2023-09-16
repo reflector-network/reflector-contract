@@ -86,7 +86,7 @@ impl EnvExtensions for Env {
         let temps_storage = get_temporary_storage(&self);
         temps_storage.set(&data_key, &price);
         if ledgers_to_live > 16 { //16 is the minimum number 
-            temps_storage.bump(&data_key, ledgers_to_live)
+            temps_storage.bump(&data_key, ledgers_to_live, ledgers_to_live)
         }
     }
 
@@ -174,7 +174,7 @@ impl EnvExtensions for Env {
     }
 
     fn bump(&self, ledgers_to_live: u32) {
-        get_instance_storage(&self).bump(ledgers_to_live);
+        get_instance_storage(&self).bump(ledgers_to_live, ledgers_to_live);
     }
 
 }
