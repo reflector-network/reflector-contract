@@ -19,10 +19,12 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
 
     let resolution: u32 = 300_000;
 
+    env.budget().reset_unlimited();
+
     let init_data = ConfigData {
         admin: admin.clone(),
         period: (100 * resolution).into(),
-        assets: generate_assets(&env, 10, 0)
+        assets: generate_assets(&env, 10000, 0)
     };
 
     env.mock_all_auths();
@@ -55,6 +57,14 @@ fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
         updates.push_back(price);
     }
     updates
+}
+
+#[test]
+fn version_test() {
+    let (_env, client, _init_data) = init_contract_with_admin();
+    let result = client.version();
+
+    assert_eq!(result, 1);
 }
 
 #[test]
@@ -365,6 +375,7 @@ fn x_twap_test() {
 
 #[test]
 fn get_non_registered_asset_price_test() {
+
     let (env, client, config_data) = init_contract_with_admin();
 
     //try to get price for unknown Stellar asset
@@ -423,8 +434,14 @@ fn unauthorized_test() {
 
 #[test]
 fn div_tests() {
-    let a = i128::MAX;
-    let b = i128::MAX / 42;
-    let result = a.fixed_div_floor(b, 14);
-    assert_eq!(result, 4200000000000000);
+    let test_cases = [
+        (154467226919499, 133928752749774, 115335373284703),
+        (i128::MAX/100, 231731687303715884105728, 734216306110962248249052545),
+        (231731687303715884105728, i128::MAX/100, 13)
+    ];
+
+    for (a, b, expected) in test_cases.iter() {
+        let result = a.fixed_div_floor(*b, 14);
+        assert_eq!(result, *expected);
+    }
 }

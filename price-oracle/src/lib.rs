@@ -11,7 +11,7 @@ use constants::Constants;
 use types::error::Error;
 use types::asset::Asset;
 use types::{config_data::ConfigData, price_data::PriceData};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, Vec, BytesN};
 
 #[contract]
 pub struct PriceOracleContract;
@@ -19,6 +19,31 @@ pub struct PriceOracleContract;
 #[contractimpl]
 impl PriceOracleContract {
     //Admin section
+
+
+    /// Updates the contract with the given WASM hash. Can only be called by the admin.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `user` - The admin address.
+    /// * `wasm_hash` - The WASM hash.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if the caller is not the admin.
+    pub fn update_contract(env: Env, user: Address, wasm_hash: BytesN<32>) {
+        env.panic_if_not_admin(&user);
+        env.deployer().update_current_contract_wasm(wasm_hash)
+    }
+
+    /// Returns the contract major version.
+    /// 
+    /// # Returns
+    /// 
+    /// The contract major version.
+    pub fn version(_: Env) -> u32 {
+        env!("CARGO_PKG_VERSION").split(".").next().unwrap().parse::<u32>().unwrap()
+    }
 
     /// Configures the contract with the given parameters. Can only be called by the admin.
     /// 

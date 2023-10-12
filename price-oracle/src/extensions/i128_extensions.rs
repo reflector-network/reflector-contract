@@ -1,4 +1,3 @@
-use core::cmp;
 
 pub trait I128Extensions {
     fn fixed_div_floor(self, y: i128, decimals: u32) -> i128;
@@ -23,19 +22,20 @@ impl I128Extensions for i128 {
     }
 }
 
-fn div_floor(x: i128, y: i128, decimals: u32) -> i128 {
-    if (x == 0) || (y == 0) {
-        return 0;
+fn div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
+    if (dividend == 0) || (divisor == 0) {
+        0_i128;
     }
-    let mut dividend = x;
-    let mut divisor = y;
-    let ashift = cmp::min(38 - x.ilog10(), 0);
-    let bshift = cmp::max(decimals - ashift, decimals);
-    if ashift > 1 {
-        dividend *= 10_i128.pow(ashift);
+    let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
+    let bshift = core::cmp::max(decimals - ashift, 0);
+    
+    let mut vdividend = dividend;
+    let mut vdivisor = divisor;
+    if ashift > 0 {
+        vdividend *= 10_i128.pow(ashift);
     }
     if bshift > 0 {
-        divisor /= 10_i128.pow(bshift);
+        vdivisor /= 10_i128.pow(bshift);
     }
-    dividend/divisor
+    vdividend/vdivisor
 }
