@@ -18,45 +18,246 @@ pub struct PriceOracleContract;
 
 #[contractimpl]
 impl PriceOracleContract {
-    //Admin section
 
-
-    /// Updates the contract with the given WASM hash. Can only be called by the admin.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `user` - The admin address.
-    /// * `wasm_hash` - The WASM hash.
-    /// 
-    /// # Panics
-    /// 
-    /// Panics if the caller is not the admin.
-    pub fn update_contract(env: Env, user: Address, wasm_hash: BytesN<32>) {
-        env.panic_if_not_admin(&user);
-        env.deployer().update_current_contract_wasm(wasm_hash)
+    /// Returns the base asset the price is reported in.
+    ///
+    /// # Returns
+    ///
+    /// Base asset for the contract
+    pub fn base(e: Env) -> Asset {
+        e.get_base_asset()
     }
 
-    /// Returns the contract major version.
-    /// 
+    /// Returns the number of decimal places used to represent price for all assets quoted by the oracle.
+    ///
     /// # Returns
-    /// 
-    /// The contract major version.
-    pub fn version(_: Env) -> u32 {
+    ///
+    /// Number of decimals places in quoted prices
+    pub fn decimals(e: Env) -> u32 {
+        Constants::DECIMALS
+    }
+
+    /// Returns the default tick period timeframe (in seconds).
+    ///
+    /// # Returns
+    ///
+    /// Price feed resolution (in seconds)
+    pub fn resolution(e: Env) -> u32 {
+        Constants::RESOLUTION / 1000
+    }
+
+    /// Returns the historical records retention period (in seconds).
+    ///
+    /// # Returns
+    ///
+    /// History retention period (in seconds)
+    pub fn period(e: Env) -> Option<u64> {
+        e.get_retention_period()
+    }
+
+    /// Returns all assets quoted by the contract.
+    ///
+    /// # Returns
+    ///
+    /// Assets quoted by the contract
+    pub fn assets(e: Env) -> Vec<Asset> {
+        e.get_assets()
+    }
+
+    /// Returns the most recent price update timestamp.
+    ///
+    /// # Returns
+    ///
+    /// Timestamp of the last recorded price update
+    pub fn last_timestamp(e: Env) -> u64 {
+        e.get_last_timestamp()
+    }
+
+    /// Returns price in base asset at specific timestamp.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset` - Asset to quote
+    /// * `timestamp` - Timestamp
+    ///
+    /// # Returns
+    ///
+    /// Price record for the given asset at the given timestamp or None if the record was not found
+    pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
+        let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
+        //get the price
+        get_price_data(&e, asset, normalized_timestamp)
+    }
+
+    /// Returns the most recent price for an asset.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset` - Asset to quote
+    ///
+    /// # Returns
+    ///
+    /// The most recent price for the given asset or None if the asset is not supported
+    pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
+        //get the last timestamp
+        let timestamp = e.get_last_timestamp();
+        //get the price
+        get_price_data(&e, asset, timestamp)
+    }
+
+    /// Returns last N price records for the given asset.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset` - Asset to quote
+    /// * `records` - Number of records to return
+    ///
+    /// # Returns
+    ///
+    /// Prices for the given asset or None if the asset is not supported
+    pub fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
+        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
+        if asset_index.is_none() {
+            return None;
+        }
+        prices(
+            &e,
+            |timestamp| get_price_data_by_index(&e, asset_index.unwrap(), timestamp),
+            records,
+        )
+    }
+
+    /// Returns the most recent cross price record for the pair of assets.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_asset` - Base asset
+    /// * `quote_asset` - Quote asset
+    ///
+    /// # Returns
+    ///
+    /// The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
+    pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
+        let timestamp = e.get_last_timestamp();
+        get_x_price(&e, base_asset, quote_asset, timestamp)
+    }
+
+    /// Returns the cross price for the pair of assets at specific timestamp.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_asset` - Base asset
+    /// * `quote_asset` - Quote asset
+    /// * `timestamp` - Timestamp
+    ///
+    /// # Returns
+    ///
+    /// Cross price (base_asset_price/quote_asset_price) at the given timestamp or None if there were no records found for quoted assets at specific timestamp
+    pub fn x_price(e: Env, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData> {
+        let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
+        get_x_price(&e, base_asset, quote_asset, normalized_timestamp)
+    }
+
+    /// Returns last N cross price records of for the pair of assets.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_asset` - Base asset
+    /// * `quote_asset` - Quote asset
+    ///
+    /// # Returns
+    ///
+    /// Last N cross prices (base_asset_price/quote_asset_price) or None if there were no records found for quoted assets
+    pub fn x_prices(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>> {
+        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
+        if asset_pair_indexes.is_none() {
+            return None;
+        }
+        prices(
+            &e,
+            |timestamp| get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp),
+            records,
+        )
+    }
+
+    /// Returns the time-weighted average price for the given asset over N recent records.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset` - Asset to quote
+    /// * `records` - Number of records to process
+    ///
+    /// # Returns
+    ///
+    /// TWAP for the given asset over N recent records or None if the asset is not supported
+    pub fn twap(e: Env, asset: Asset, records: u32) -> Option<i128> {
+        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
+        if asset_index.is_none() {
+            return None;
+        }
+        get_twap(
+            &e,
+            |timestamp| get_price_data_by_index(&e, asset_index.unwrap(), timestamp),
+            records,
+        )
+    }
+
+    /// Returns the time-weighted average cross price for the given asset pair over N recent records.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_asset` - Base asset
+    /// * `quote_asset` - Quote asset
+    ///
+    /// # Returns
+    ///
+    /// TWAP (base_asset_price/quote_asset_price) or None if the assets are not supported.
+    pub fn x_twap(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
+        //get asset index to avoid multiple calls
+        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
+        if asset_pair_indexes.is_none() {
+            return None;
+        }
+        get_twap(
+            &e,
+            |timestamp| get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp),
+            records,
+        )
+    }
+
+    /// Returns current protocol version of the contract.
+    ///
+    /// # Returns
+    ///
+    /// Contract protocol version
+    pub fn version(e: Env) -> u32 {
         env!("CARGO_PKG_VERSION").split(".").next().unwrap().parse::<u32>().unwrap()
     }
 
-    /// Configures the contract with the given parameters. Can only be called by the admin.
+
+    //Admin section
+
+    /// Returns admin address of the contract.
+    ///
+    /// # Returns
+    ///
+    /// Contract admin account address
+    pub fn admin(e: Env) -> Option<Address> {
+        e.get_admin()
+    }
+
+    /// Updates the contract configuration parameters. Can be invoked only by the admin account.
     /// 
     /// # Arguments
     /// 
-    /// * `user` - The admin address.
-    /// * `config` - The configuration parameters.
+    /// * `admin` - Admin account address
+    /// * `config` - Configuration parameters
     /// 
     /// # Panics
     /// 
-    /// Panics if the contract is already initialized, or if the version is invalid.
-    pub fn config(e: Env, user: Address, config: ConfigData) {
-        user.require_auth();
+    /// Panics if the contract is already initialized, or if the version is invalid
+    pub fn config(e: Env, admin: Address, config: ConfigData) {
+        admin.require_auth();
         if e.is_initialized() {
             e.panic_with_error(Error::AlreadyInitialized);
         }
@@ -66,83 +267,64 @@ impl PriceOracleContract {
         Self::__add_assets(&e, config.assets);
     }
 
-    /// Bumps the contract instance storage to the given number of ledgers.
+    /// Bumps the contract instance storage expiration to the given number of ledgers.
     /// 
     /// # Arguments
     /// 
-    /// * `ledgers_to_live` - The number of ledgers to live.
+    /// * `ledgers_to_live` - Extension period specified in ledgers count
     /// 
     /// # Panics
     /// 
-    /// Panics if ledgers_to_live is invalid.
+    /// Panics if ledgers_to_live is invalid
     pub fn bump(e: Env, ledgers_to_live: u32) {
         e.bump(ledgers_to_live);
     }
 
-    fn __add_assets(e: &Env, assets: Vec<Asset>) {
-        let mut presented_assets = e.get_assets();
-
-        let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);
-        for asset in assets.iter() {
-            //check if the asset is already added
-            if is_asset_presented(&presented_assets, &asset) {
-                panic_with_error!(&e, Error::AssetAlreadyPresented);
-            }
-            presented_assets.push_back(asset.clone());
-            assets_indexes.push_back((asset, presented_assets.len() as u32 - 1));
-        }
-
-        e.set_assets(presented_assets);
-        for (asset, index) in assets_indexes.iter() {
-            e.set_asset_index(asset, index);
-        }
-    }
-
-    /// Adds the given assets to the contract. Can only be called by the admin.
+    /// Adds given assets to the contract quoted assets list. Can be invoked only by the admin account.
     /// 
     /// # Arguments
     /// 
-    /// * `user` - The admin address.
-    /// * `assets` - The assets to add.
-    /// * `version` - The configuration version.
+    /// * `admin` - Admin account address
+    /// * `assets` - Assets to add
+    /// * `version` - Configuration protocol version
     /// 
     /// # Panics
     /// 
-    /// Panics if the caller is not the admin, or if the assets are already added, or if the version is invalid.
-    pub fn add_assets(e: Env, user: Address, assets: Vec<Asset>) {
-        e.panic_if_not_admin(&user);
+    /// Panics if the caller doesn't match admin address, or if the assets are already added
+    pub fn add_assets(e: Env, admin: Address, assets: Vec<Asset>) {
+        e.panic_if_not_admin(&admin);
         Self::__add_assets(&e, assets);
     }
 
-    /// Sets the retention period for the prices. Can only be called by the admin.
+    /// Sets history retention period for the prices. Can be invoked only by the admin account.
     /// 
     /// # Arguments
     /// 
-    /// * `user` - The admin address.
-    /// * `period` - The retention period.
-    /// * `version` - The configuration version.
+    /// * `admin` - Admin account address
+    /// * `period` - History retention period (in seconds)
+    /// * `version` - Configuration protocol version
     /// 
     /// # Panics
     /// 
-    /// Panics if the caller is not the admin, or if the period is invalid, or if the version is invalid.
-    pub fn set_period(e: Env, user: Address, period: u64) {
-        e.panic_if_not_admin(&user);
+    /// Panics if the caller doesn't match admin address, or if the period/version is invalid
+    pub fn set_period(e: Env, admin: Address, period: u64) {
+        e.panic_if_not_admin(&admin);
         e.set_retention_period(period);
     }
 
-    /// Sets the prices for the assets. Can only be called by the admin.
+    /// Record new price feed history snapshot. Can be invoked only by the admin account.
     /// 
     /// # Arguments
     /// 
-    /// * `user` - The admin address.
-    /// * `updates` - The prices to set.
-    /// * `timestamp` - The timestamp of the prices.
+    /// * `admin` - Admin account address
+    /// * `updates` - Price feed snapshot
+    /// * `timestamp` - History snapshot timestamp
     /// 
     /// # Panics
     /// 
-    /// Panics if the caller is not the admin, or if the prices are invalid.
-    pub fn set_price(e: Env, user: Address, updates: Vec<i128>, timestamp: u64) {
-        e.panic_if_not_admin(&user);
+    /// Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
+    pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
+        e.panic_if_not_admin(&admin);
 
         let retention_period = e.get_retention_period().unwrap();
 
@@ -162,235 +344,42 @@ impl PriceOracleContract {
         }
     }
 
-    //end of admin section
-
-    /// Returns the contract admin address.
-    /// 
-    /// # Returns
-    /// 
-    /// The admin address.
-    pub fn admin(e: Env) -> Option<Address> {
-        e.get_admin()
-    }
-
-    /// Returns the base asset.
-    /// 
-    /// # Returns
-    /// 
-    /// The base asset.
-    pub fn base(e: Env) -> Asset {
-        e.get_base_asset()
-    }
-
-    /// Returns the number of decimals for the prices.
-    /// 
-    /// # Returns
-    /// 
-    /// The number of decimals.
-    pub fn decimals(_e: Env) -> u32 {
-        Constants::DECIMALS
-    }
-
-    /// Returns the prices resolution.
-    /// 
-    /// # Returns
-    /// 
-    /// The prices resolution.
-    pub fn resolution(_e: Env) -> u32 {
-        //return resolution in seconds
-        Constants::RESOLUTION / 1000
-    }
-
-    /// Returns the retention period of the prices in seconds.
-    /// 
-    /// # Returns
-    /// 
-    /// The retention period.
-    pub fn period(e: Env) -> Option<u64> {
-        e.get_retention_period()
-    }
-
-    /// Returns the assets supported by the contract.
-    /// 
-    /// # Returns
-    /// 
-    /// The assets supported by the contract or None if no assets are supported.
-    pub fn assets(e: Env) -> Vec<Asset> {
-        e.get_assets()
-    }
-
-    /// Returns the timestamp of the last price update.
-    /// 
-    /// # Returns
-    /// 
-    /// The timestamp of the last price update.
-    pub fn last_timestamp(e: Env) -> u64 {
-        e.get_last_timestamp()
-    }
-
-    /// Returns the prices for the given asset at the given timestamp.
-    /// 
+    /// Updates the contract source code. Can be invoked only by the admin account.
+    ///
     /// # Arguments
-    /// 
-    /// * `asset` - The asset.
-    /// * `timestamp` - The timestamp.
-    /// 
-    /// # Returns
-    /// 
-    /// The prices for the given asset at the given timestamp or None if the asset is not supported, or if the timestamp is invalid. 
-    pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
-        let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
-        //get the price
-        get_price_data(&e, asset, normalized_timestamp)
+    ///
+    /// * `admin` - Admin account address
+    /// * `wasm_hash` - WASM hash of the contract source code
+    ///
+    /// # Panics
+    ///
+    /// Panics if the caller doesn't match admin address
+    pub fn update_contract(env: Env, admin: Address, wasm_hash: BytesN<32>) {
+        env.panic_if_not_admin(&admin);
+        env.deployer().update_current_contract_wasm(wasm_hash)
     }
 
-    /// Returns the last price for the given asset.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `asset` - The asset.
-    /// 
-    /// # Returns
-    /// 
-    /// The last price for the given asset or None if the asset is not supported.
-    pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
-        //get the last timestamp
-        let timestamp = e.get_last_timestamp();
-        //get the price
-        get_price_data(&e, asset, timestamp)
-    }
+    fn __add_assets(e: &Env, assets: Vec<Asset>) {
+        let mut presented_assets = e.get_assets();
 
-    /// Returns the cross price for the given assets at the given timestamp.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `base_asset` - The base asset.
-    /// * `quote_asset` - The quote asset.
-    /// * `timestamp` - The timestamp.
-    /// 
-    /// # Returns
-    /// 
-    /// The cross price for the given assets at the given timestamp or None if the assets are not supported, or if the timestamp is invalid.
-    pub fn x_price(
-        e: Env,
-        base_asset: Asset,
-        quote_asset: Asset,
-        timestamp: u64,
-    ) -> Option<PriceData> {
-        let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
-        get_x_price(&e, base_asset, quote_asset, normalized_timestamp)
-    }
-
-    /// Returns the last cross price for the given assets.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `base_asset` - The base asset.
-    /// * `quote_asset` - The quote asset.
-    /// 
-    /// # Returns
-    /// 
-    /// The last cross price for the given assets or None if the assets are not supported.
-    pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
-        let timestamp = e.get_last_timestamp();
-        get_x_price(&e, base_asset, quote_asset, timestamp)
-    }
-
-    /// Returns the stack of prices for the given asset.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `asset` - The asset.
-    /// * `records` - The number of records to return.
-    /// 
-    /// # Returns
-    /// 
-    /// The prices for the given asset or None if the asset is not supported. If there are fewer records than requested, the returned vector will be shorter.
-    pub fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
-        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
-        if asset_index.is_none() {
-            return None;
+        let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);
+        for asset in assets.iter() {
+            //check if the asset has been already added
+            if has_asset(&presented_assets, &asset) {
+                panic_with_error!(&e, Error::AssetAlreadyPresented);
+            }
+            presented_assets.push_back(asset.clone());
+            assets_indexes.push_back((asset, presented_assets.len() as u32 - 1));
         }
-        prices(
-            &e,
-            |timestamp| get_price_data_by_index(&e, asset_index.unwrap(), timestamp),
-            records,
-        )
-    }
 
-    /// Returns the stack of cross prices for the given assets.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `base_asset` - The base asset.
-    /// * `quote_asset` - The quote asset.
-    /// 
-    /// # Returns
-    /// 
-    /// The cross prices for the given assets or None if the assets are not supported. If there are fewer records than requested, the returned vector will be shorter.
-    pub fn x_prices(
-        e: Env,
-        base_asset: Asset,
-        quote_asset: Asset,
-        records: u32,
-    ) -> Option<Vec<PriceData>> {
-        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
-        if asset_pair_indexes.is_none() {
-            return None;
+        e.set_assets(presented_assets);
+        for (asset, index) in assets_indexes.iter() {
+            e.set_asset_index(asset, index);
         }
-        prices(
-            &e,
-            |timestamp| get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp),
-            records,
-        )
-    }
-
-    /// Returns the time-weighted average price for the given asset over the given number of records.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `asset` - The asset.
-    /// * `records` - The number of records to use.
-    /// 
-    /// # Returns
-    /// 
-    /// The time-weighted average price for the given asset over the given number of records or None if the asset is not supported.
-    pub fn twap(e: Env, asset: Asset, records: u32) -> Option<i128> {
-        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
-        if asset_index.is_none() {
-            return None;
-        }
-        get_twap(
-            &e,
-            |timestamp| get_price_data_by_index(&e, asset_index.unwrap(), timestamp),
-            records,
-        )
-    }
-
-    /// Returns the time-weighted average cross price for the given assets over the given number of records.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `base_asset` - The base asset.
-    /// * `quote_asset` - The quote asset.
-    /// 
-    /// # Returns
-    /// 
-    /// The time-weighted average cross price for the given assets over the given number of records or None if the assets are not supported.
-    pub fn x_twap(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
-        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset); //get the asset index to avoid multiple calls
-        if asset_pair_indexes.is_none() {
-            return None;
-        }
-        get_twap(
-            &e,
-            |timestamp| get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp),
-            records,
-        )
     }
 }
 
-fn is_asset_presented(assets: &Vec<Asset>, asset: &Asset) -> bool {
+fn has_asset(assets: &Vec<Asset>, asset: &Asset) -> bool {
     for current_asset in assets.iter() {
         if &current_asset == asset {
             return true;
@@ -399,11 +388,7 @@ fn is_asset_presented(assets: &Vec<Asset>, asset: &Asset) -> bool {
     false
 }
 
-fn prices<F: Fn(u64) -> Option<PriceData>>(
-    e: &Env,
-    get_price_fn: F,
-    records: u32,
-) -> Option<Vec<PriceData>> {
+fn prices<F: Fn(u64) -> Option<PriceData>>(e: &Env, get_price_fn: F, records: u32) -> Option<Vec<PriceData>> {
     //check if the asset is valid
     let mut timestamp = e.get_last_timestamp();
     if timestamp == 0 {
@@ -414,14 +399,13 @@ fn prices<F: Fn(u64) -> Option<PriceData>>(
     let resolution = Constants::RESOLUTION as u64;
 
     let mut records = records;
-    if records > 50 {
-        records = 50;
+    if records > 20 {
+        records = 20;
     }
 
     for _ in 0..records {
         let price = get_price_fn(timestamp);
         if price.is_none() {
-            //TODO: should we put None here?
             continue;
         }
         prices.push_back(price.unwrap());
