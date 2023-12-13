@@ -1,24 +1,21 @@
 #![no_std]
 
+mod extensions;
 mod test;
 mod types;
-mod extensions;
-mod constants;
 
 use extensions::i128_extensions::I128Extensions;
 use extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
-use constants::Constants;
-use types::error::Error;
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec};
 use types::asset::Asset;
+use types::error::Error;
 use types::{config_data::ConfigData, price_data::PriceData};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, Vec, BytesN};
 
 #[contract]
 pub struct PriceOracleContract;
 
 #[contractimpl]
 impl PriceOracleContract {
-
     /// Returns the base asset the price is reported in.
     ///
     /// # Returns
@@ -34,7 +31,7 @@ impl PriceOracleContract {
     ///
     /// Number of decimals places in quoted prices
     pub fn decimals(e: Env) -> u32 {
-        Constants::DECIMALS
+        e.get_decimals()
     }
 
     /// Returns the default tick period timeframe (in seconds).
@@ -43,7 +40,7 @@ impl PriceOracleContract {
     ///
     /// Price feed resolution (in seconds)
     pub fn resolution(e: Env) -> u32 {
-        Constants::RESOLUTION / 1000
+        e.get_resolution() / 1000
     }
 
     /// Returns the historical records retention period (in seconds).
@@ -84,7 +81,8 @@ impl PriceOracleContract {
     ///
     /// Price record for the given asset at the given timestamp or None if the record was not found
     pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
-        let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
+        let resolution = e.get_resolution();
+        let normalized_timestamp = timestamp.get_normalized_timestamp(resolution.into());
         //get the price
         get_price_data(&e, asset, normalized_timestamp)
     }
@@ -139,7 +137,8 @@ impl PriceOracleContract {
     /// The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
     pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
         let timestamp = e.get_last_timestamp();
-        get_x_price(&e, base_asset, quote_asset, timestamp)
+        let decimals = e.get_decimals();
+        get_x_price(&e, base_asset, quote_asset, timestamp, decimals)
     }
 
     /// Returns the cross price for the pair of assets at specific timestamp.
@@ -153,9 +152,15 @@ impl PriceOracleContract {
     /// # Returns
     ///
     /// Cross price (base_asset_price/quote_asset_price) at the given timestamp or None if there were no records found for quoted assets at specific timestamp
-    pub fn x_price(e: Env, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData> {
-        let normalized_timestamp = timestamp.get_normalized_timestamp(Constants::RESOLUTION.into());
-        get_x_price(&e, base_asset, quote_asset, normalized_timestamp)
+    pub fn x_price(
+        e: Env,
+        base_asset: Asset,
+        quote_asset: Asset,
+        timestamp: u64,
+    ) -> Option<PriceData> {
+        let normalized_timestamp = timestamp.get_normalized_timestamp(e.get_resolution().into());
+        let decimals = e.get_decimals();
+        get_x_price(&e, base_asset, quote_asset, normalized_timestamp, decimals)
     }
 
     /// Returns last N cross price records of for the pair of assets.
@@ -168,14 +173,22 @@ impl PriceOracleContract {
     /// # Returns
     ///
     /// Last N cross prices (base_asset_price/quote_asset_price) or None if there were no records found for quoted assets
-    pub fn x_prices(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>> {
+    pub fn x_prices(
+        e: Env,
+        base_asset: Asset,
+        quote_asset: Asset,
+        records: u32,
+    ) -> Option<Vec<PriceData>> {
         let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
         if asset_pair_indexes.is_none() {
             return None;
         }
+        let decimals = e.get_decimals();
         prices(
             &e,
-            |timestamp| get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp),
+            |timestamp| {
+                get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp, decimals)
+            },
             records,
         )
     }
@@ -218,9 +231,12 @@ impl PriceOracleContract {
         if asset_pair_indexes.is_none() {
             return None;
         }
+        let decimals = e.get_decimals();
         get_twap(
             &e,
-            |timestamp| get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp),
+            |timestamp| {
+                get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp, decimals)
+            },
             records,
         )
     }
@@ -230,10 +246,14 @@ impl PriceOracleContract {
     /// # Returns
     ///
     /// Contract protocol version
-    pub fn version(e: Env) -> u32 {
-        env!("CARGO_PKG_VERSION").split(".").next().unwrap().parse::<u32>().unwrap()
+    pub fn version(_e: Env) -> u32 {
+        env!("CARGO_PKG_VERSION")
+            .split(".")
+            .next()
+            .unwrap()
+            .parse::<u32>()
+            .unwrap()
     }
-
 
     //Admin section
 
@@ -247,14 +267,14 @@ impl PriceOracleContract {
     }
 
     /// Updates the contract configuration parameters. Can be invoked only by the admin account.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `admin` - Admin account address
     /// * `config` - Configuration parameters
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the contract is already initialized, or if the version is invalid
     pub fn config(e: Env, admin: Address, config: ConfigData) {
         admin.require_auth();
@@ -262,34 +282,37 @@ impl PriceOracleContract {
             e.panic_with_error(Error::AlreadyInitialized);
         }
         e.set_admin(&config.admin);
+        e.set_base_asset(&config.base_asset);
+        e.set_decimals(config.decimals);
+        e.set_resolution(config.resolution);
         e.set_retention_period(config.period);
 
         Self::__add_assets(&e, config.assets);
     }
 
     /// Bumps the contract instance storage expiration to the given number of ledgers.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `ledgers_to_live` - Extension period specified in ledgers count
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if ledgers_to_live is invalid
     pub fn bump(e: Env, ledgers_to_live: u32) {
         e.bump(ledgers_to_live);
     }
 
     /// Adds given assets to the contract quoted assets list. Can be invoked only by the admin account.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `admin` - Admin account address
     /// * `assets` - Assets to add
     /// * `version` - Configuration protocol version
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the caller doesn't match admin address, or if the assets are already added
     pub fn add_assets(e: Env, admin: Address, assets: Vec<Asset>) {
         e.panic_if_not_admin(&admin);
@@ -297,15 +320,15 @@ impl PriceOracleContract {
     }
 
     /// Sets history retention period for the prices. Can be invoked only by the admin account.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `admin` - Admin account address
     /// * `period` - History retention period (in seconds)
     /// * `version` - Configuration protocol version
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the caller doesn't match admin address, or if the period/version is invalid
     pub fn set_period(e: Env, admin: Address, period: u64) {
         e.panic_if_not_admin(&admin);
@@ -313,15 +336,15 @@ impl PriceOracleContract {
     }
 
     /// Record new price feed history snapshot. Can be invoked only by the admin account.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `admin` - Admin account address
     /// * `updates` - Price feed snapshot
     /// * `timestamp` - History snapshot timestamp
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
     pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&admin);
@@ -388,7 +411,11 @@ fn has_asset(assets: &Vec<Asset>, asset: &Asset) -> bool {
     false
 }
 
-fn prices<F: Fn(u64) -> Option<PriceData>>(e: &Env, get_price_fn: F, records: u32) -> Option<Vec<PriceData>> {
+fn prices<F: Fn(u64) -> Option<PriceData>>(
+    e: &Env,
+    get_price_fn: F,
+    records: u32,
+) -> Option<Vec<PriceData>> {
     //check if the asset is valid
     let mut timestamp = e.get_last_timestamp();
     if timestamp == 0 {
@@ -396,7 +423,7 @@ fn prices<F: Fn(u64) -> Option<PriceData>>(e: &Env, get_price_fn: F, records: u3
     }
 
     let mut prices = Vec::new(&e);
-    let resolution = Constants::RESOLUTION as u64;
+    let resolution = e.get_resolution() as u64;
 
     let mut records = records;
     if records > 20 {
@@ -427,11 +454,7 @@ fn get_twap<F: Fn(u64) -> Option<PriceData>>(
     get_price_fn: F,
     records: u32,
 ) -> Option<i128> {
-    let prices_result = prices(
-        &e,
-        get_price_fn,
-        records,
-    );
+    let prices_result = prices(&e, get_price_fn, records);
     if prices_result.is_none() {
         return None;
     }
@@ -446,19 +469,33 @@ fn get_twap<F: Fn(u64) -> Option<PriceData>>(
     Some(sum / (prices.len() as i128))
 }
 
-fn get_x_price(e: &Env, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData> {
+fn get_x_price(
+    e: &Env,
+    base_asset: Asset,
+    quote_asset: Asset,
+    timestamp: u64,
+    decimals: u32,
+) -> Option<PriceData> {
     let asset_pair_indexes = get_asset_pair_indexes(e, base_asset, quote_asset);
     if asset_pair_indexes.is_none() {
         return None;
     }
-    get_x_price_by_indexes(e, asset_pair_indexes.unwrap(), timestamp)
+    get_x_price_by_indexes(e, asset_pair_indexes.unwrap(), timestamp, decimals)
 }
 
-fn get_x_price_by_indexes(e: &Env, asset_pair_indexes: (u8, u8), timestamp: u64) -> Option<PriceData> {
+fn get_x_price_by_indexes(
+    e: &Env,
+    asset_pair_indexes: (u8, u8),
+    timestamp: u64,
+    decimals: u32,
+) -> Option<PriceData> {
     let (base_asset, quote_asset) = asset_pair_indexes;
     //check if the asset are the same
     if base_asset == quote_asset {
-        return Some(PriceData { price: 10i128.pow(Constants::DECIMALS), timestamp });
+        return Some(PriceData {
+            price: 10i128.pow(decimals),
+            timestamp,
+        });
     }
 
     //get the price for base_asset
@@ -477,7 +514,7 @@ fn get_x_price_by_indexes(e: &Env, asset_pair_indexes: (u8, u8), timestamp: u64)
     Some(PriceData {
         price: base_asset_price
             .unwrap()
-            .fixed_div_floor(quote_asset_price.unwrap(), Constants::DECIMALS),
+            .fixed_div_floor(quote_asset_price.unwrap(), decimals),
         timestamp,
     })
 }
@@ -503,7 +540,6 @@ fn get_price_data(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
     }
     get_price_data_by_index(e, asset.unwrap(), timestamp)
 }
-
 
 fn get_price_data_by_index(e: &Env, asset: u8, timestamp: u64) -> Option<PriceData> {
     let price = e.get_price(asset, timestamp);

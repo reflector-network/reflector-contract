@@ -12,9 +12,9 @@ Check the standard for general info and public consumer interface documentation.
 pub fn check_liquidation(env: Env, reflector_contract_id: Address, loan: Loan, liquidation_threshold: i128) {
     // loan position example
     // {
-    //    collateral_asset: Asset::Generic(Symbol::new(&env, "BTC")),
+    //    collateral_asset: Asset::Other(Symbol::new(&env, "BTC")),
     //    collateral_amount: 10753533963_i128,
-    //    borrowed_asset: Asset::Generic(Symbol::new(&env, "ETH")),
+    //    borrowed_asset: Asset::Other(Symbol::new(&env, "ETH")),
     //    borrowed_amount: 154850889072_i128
     // }
 
@@ -96,7 +96,7 @@ pub fn maintain_stable_coin_peg(env: Env, reflector_contract_id: Address, curren
     let reflector_contract = PriceOracleClient::new(&env, &reflector_contract_id);
 
     // fetch TWAP-approximated external price for the associated reference ticker
-    let coin = Asset::Generic(Symbol::new(&env, "CHF"));
+    let coin = Asset::Other(Symbol::new(&env, "CHF"));
     let reference_price = reflector_contract.twap(&coin, &5).unwrap();
 
     // take action if the price diverts more than 0.1% from the reference price
@@ -113,30 +113,19 @@ pub fn maintain_stable_coin_peg(env: Env, reflector_contract_id: Address, curren
 
 ## Building the Contracts
 
-The contract optimizes on calls and storage by using constants for values that will not change throughout the contract's lifetime, as well as for the default administrator. To build the contract with these values, you need to execute a script with parameters. 
-
 ### Prerequisites
 
 - Ensure you have Rust installed and set up on your local machine. [Follow the official guide here.](https://www.rust-lang.org/tools/install)
 
-### Building the Price Oracle and Price Oracle Plus
+### Building the Price Oracle
 
-1. Navigate to the directory of the contract you want to build:
+1. Navigate to the directory of the contract:
 
     ```bash
     cd ./price-oracle
     ```
 
-2. Run the `build-wasm.sh` script with the appropriate parameters:
+2. Run the build command:
     ```bash
-    ./build-wasm.sh --decimals 14 --resolution 300000 --base_asset_type 0 --base CCG...TY6
+    cargo build --release --target wasm32-unknown-unknown
     ```
-
-### Parameters
-
-- `--decimals`: Number of decimal places the asset uses.
-- `--resolution`: The frequency of price updates, specified in milliseconds.
-- `--base_asset_type`: The base asset type. 0 for Stellar assets and 1 for Generic assets.
-- `--base`: The base asset's contract address or generic code.
-
-The script will replace the values for constants, compile the wasm file, and restore the previous constant values.

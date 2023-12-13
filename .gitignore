@@ -1,3 +1,4 @@
 /.soroban
 /target
 /Cargo.lock
+/price-oracle/test_snapshots

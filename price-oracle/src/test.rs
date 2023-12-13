@@ -4,27 +4,32 @@ extern crate alloc;
 
 use super::*;
 use alloc::string::ToString;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
+use soroban_sdk::{testutils::Address as _, Address, Env, Symbol, String};
 
-use {constants::Constants, extensions::{u64_extensions::U64Extensions, env_extensions::EnvExtensions, i128_extensions::I128Extensions}, types::asset::Asset};
+use {extensions::{u64_extensions::U64Extensions, i128_extensions::I128Extensions}, types::asset::Asset};
+
+const RESOLUTION: u32 = 300_000;
+const DECIMALS: u32 = 14;
 
 fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
     let env = Env::default();
 
-    let admin = Address::random(&env);
+    let admin = Address::generate(&env);
 
-    let contract_id = &Address::from_contract_id(&BytesN::from_array(&env, &[0; 32]));
+    let contract_id = &Address::from_string(&String::from_str(&env, "CDXHQTB7FGRMWTLJJLNI3XPKVC6SZDB5SFGZUYDPEGQQNC4G6CKE4QRC"));
+
     env.register_contract(contract_id, PriceOracleContract);
     let client: PriceOracleContractClient<'a> = PriceOracleContractClient::new(&env, contract_id);
-
-    let resolution: u32 = 300_000;
 
     env.budget().reset_unlimited();
 
     let init_data = ConfigData {
         admin: admin.clone(),
-        period: (100 * resolution).into(),
-        assets: generate_assets(&env, 10000, 0)
+        period: (100 * RESOLUTION).into(),
+        assets: generate_assets(&env, 10, 0),
+        base_asset: Asset::Stellar(Address::generate(&env)),
+        decimals: 14,
+        resolution: RESOLUTION
     };
 
     env.mock_all_auths();
@@ -36,16 +41,16 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
 }
 
 fn normalize_price(price: i128) -> i128 {
-    price * 10i128.pow(Constants::DECIMALS)
+    price * 10i128.pow(DECIMALS)
 }
 
 fn generate_assets(e: &Env, count: usize, start_index: u32) -> Vec<Asset> {
     let mut assets = Vec::new(&e);
     for i in 0..count {
         if i % 2 == 0 {
-            assets.push_back(Asset::Stellar(Address::random(&e)));
+            assets.push_back(Asset::Stellar(Address::generate(&e)));
         } else {
-            assets.push_back(Asset::Generic(Symbol::new(e, &("ASSET_".to_string() + &(start_index + i as u32).to_string()))));
+            assets.push_back(Asset::Other(Symbol::new(e, &("ASSET_".to_string() + &(start_index + i as u32).to_string()))));
         }
     }
     assets
@@ -64,27 +69,27 @@ fn version_test() {
     let (_env, client, _init_data) = init_contract_with_admin();
     let result = client.version();
 
-    assert_eq!(result, 1);
+    assert_eq!(result, 2);
 }
 
 #[test]
 fn init_test() {
-    let (env, client, init_data) = init_contract_with_admin();
+    let (_env, client, init_data) = init_contract_with_admin();
 
     let address = client.admin();
     assert_eq!(address.unwrap(), init_data.admin.clone());
 
     let base = client.base();
-    assert_eq!(base, env.get_base_asset());
+    assert_eq!(base, init_data.base_asset);
 
     let resolution = client.resolution();
-    assert_eq!(resolution, Constants::RESOLUTION / 1000);
+    assert_eq!(resolution, RESOLUTION / 1000);
 
     let period = client.period().unwrap();
     assert_eq!(period, init_data.period);
 
     let decimals = client.decimals();
-    assert_eq!(decimals, Constants::DECIMALS);
+    assert_eq!(decimals, DECIMALS);
 
     let assets = client.assets();
     assert_eq!(assets, init_data.assets);
@@ -379,23 +384,23 @@ fn get_non_registered_asset_price_test() {
     let (env, client, config_data) = init_contract_with_admin();
 
     //try to get price for unknown Stellar asset
-    let mut result = client.lastprice(&Asset::Stellar(Address::random(&env)));
+    let mut result = client.lastprice(&Asset::Stellar(Address::generate(&env)));
     assert_eq!(result, None);
 
-    //try to get price for unknown Generic asset
-    result = client.lastprice(&Asset::Generic(Symbol::new(&env, "NonRegisteredAsset")));
+    //try to get price for unknown Other asset
+    result = client.lastprice(&Asset::Other(Symbol::new(&env, "NonRegisteredAsset")));
     assert_eq!(result, None);
 
     //try to get price for unknown base asset
-    result = client.x_last_price(&Asset::Stellar(Address::random(&env)), &config_data.assets.get_unchecked(1));
+    result = client.x_last_price(&Asset::Stellar(Address::generate(&env)), &config_data.assets.get_unchecked(1));
     assert_eq!(result, None);
 
     //try to get price for unknown quote asset
-    result = client.x_last_price(&config_data.assets.get_unchecked(1), &Asset::Stellar(Address::random(&env)));
+    result = client.x_last_price(&config_data.assets.get_unchecked(1), &Asset::Stellar(Address::generate(&env)));
     assert_eq!(result, None);
 
     //try to get price for both unknown assets
-    result = client.x_last_price(&Asset::Stellar(Address::random(&env)), &Asset::Generic(Symbol::new(&env, "NonRegisteredAsset")));
+    result = client.x_last_price(&Asset::Stellar(Address::generate(&env)), &Asset::Other(Symbol::new(&env, "NonRegisteredAsset")));
     assert_eq!(result, None);
 }
 
@@ -408,7 +413,7 @@ fn get_asset_price_for_invalid_timestamp_test() {
     assert_eq!(result, None);
 
     //try to get price for unknown asset
-    result = client.lastprice(&Asset::Stellar(Address::random(&env)));
+    result = client.lastprice(&Asset::Stellar(Address::generate(&env)));
     assert_eq!(result, None);
 }
 
@@ -421,8 +426,8 @@ fn unauthorized_test() {
 
     let updates = get_updates(&env, &assets, 100);
 
-    let account = Address::random(&env);
-    let timestamp = (112331 as u64).get_normalized_timestamp(Constants::RESOLUTION as u64);
+    let account = Address::generate(&env);
+    let timestamp = (112331 as u64).get_normalized_timestamp(RESOLUTION as u64);
 
     //mock auth to check only contract's admin validation
     env.mock_all_auths();

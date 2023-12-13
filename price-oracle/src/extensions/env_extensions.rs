@@ -1,18 +1,19 @@
 #![allow(non_upper_case_globals)]
 use soroban_sdk::storage::{Instance, Temporary};
-use soroban_sdk::{panic_with_error, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
-use crate::constants;
 use crate::extensions;
 use crate::types;
 
-use constants::Constants;
 use extensions::u128_helper::U128Helper;
-use types::{asset::Asset, asset_type::AssetType, error::Error};
+use types::{asset::Asset, error::Error};
 const ADMIN_KEY: &str = "admin";
 const LAST_TIMESTAMP: &str = "last_timestamp";
 const RETENTION_PERIOD: &str = "period";
 const ASSETS: &str = "assets";
+const BASE_ASSET: &str = "base_asset";
+const DECIMALS: &str = "decimals";
+const RESOLUTION: &str = "resolution";
 
 pub trait EnvExtensions {
     fn is_authorized(&self, invoker: &Address) -> bool;
@@ -21,6 +22,22 @@ pub trait EnvExtensions {
 
     fn set_admin(&self, admin: &Address);
 
+    fn get_base_asset(&self) -> Asset;
+
+    fn set_base_asset(&self, base_asset: &Asset);
+
+    fn get_decimals(&self) -> u32;
+
+    fn set_decimals(&self, decimals: u32);
+
+    fn get_resolution(&self) -> u32;
+
+    fn set_resolution(&self, resolution: u32);
+
+    fn get_retention_period(&self) -> Option<u64>;
+
+    fn set_retention_period(&self, period: u64);
+
     fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128>;
 
     fn set_price(&self, asset: u8, price: i128, timestamp: u64, ledgers: u32);
@@ -28,10 +45,6 @@ pub trait EnvExtensions {
     fn get_last_timestamp(&self) -> u64;
 
     fn set_last_timestamp(&self, timestamp: u64);
-
-    fn get_retention_period(&self) -> Option<u64>;
-
-    fn set_retention_period(&self, period: u64);
 
     fn get_assets(&self) -> Vec<Asset>;
 
@@ -42,8 +55,6 @@ pub trait EnvExtensions {
     fn get_asset_index(&self, asset: Asset) -> Option<u8>;
 
     fn panic_if_not_admin(&self, invoker: &Address);
-
-    fn get_base_asset(&self) -> Asset;
 
     fn is_initialized(&self) -> bool;
 
@@ -71,6 +82,40 @@ impl EnvExtensions for Env {
         get_instance_storage(&self).set(&ADMIN_KEY, admin);
     }
 
+    fn set_base_asset(&self, base_asset: &Asset) {
+        get_instance_storage(&self).set(&BASE_ASSET, base_asset)
+    }
+
+    fn get_base_asset(&self) -> Asset {
+        get_instance_storage(self).get(&BASE_ASSET).unwrap()
+    }
+
+    fn get_decimals(&self) -> u32 {
+        get_instance_storage(self).get(&DECIMALS).unwrap()
+    }
+
+    fn set_decimals(&self, decimals: u32) {
+        get_instance_storage(&self).set(&DECIMALS, &decimals)
+    }
+
+    fn get_resolution(&self) -> u32 {
+        get_instance_storage(self).get(&RESOLUTION).unwrap()
+    }
+
+    fn set_resolution(&self, resolution: u32) {
+        get_instance_storage(&self).set(&RESOLUTION, &resolution)
+    }
+
+    fn get_retention_period(&self) -> Option<u64> {
+        get_instance_storage(&self)
+            .get(&RETENTION_PERIOD)
+            .unwrap_or_default()
+    }
+
+    fn set_retention_period(&self, rdm_period: u64) {
+        get_instance_storage(&self).set(&RETENTION_PERIOD, &rdm_period);
+    }
+
     fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128> {
         //build the key for the price
         let data_key = U128Helper::encode_price_record_key(timestamp, asset);
@@ -86,7 +131,7 @@ impl EnvExtensions for Env {
         let temps_storage = get_temporary_storage(&self);
         temps_storage.set(&data_key, &price);
         if ledgers_to_live > 16 { //16 is the minimum number 
-            temps_storage.bump(&data_key, ledgers_to_live, ledgers_to_live)
+            temps_storage.extend_ttl(&data_key, ledgers_to_live, ledgers_to_live)
         }
     }
 
@@ -97,16 +142,6 @@ impl EnvExtensions for Env {
 
     fn set_last_timestamp(&self, timestamp: u64) {
         get_instance_storage(&self).set(&LAST_TIMESTAMP, &timestamp);
-    }
-
-    fn get_retention_period(&self) -> Option<u64> {
-        get_instance_storage(&self)
-            .get(&RETENTION_PERIOD)
-            .unwrap_or_default()
-    }
-
-    fn set_retention_period(&self, rdm_period: u64) {
-        get_instance_storage(&self).set(&RETENTION_PERIOD, &rdm_period);
     }
 
     fn get_assets(&self) -> Vec<Asset> {
@@ -124,7 +159,7 @@ impl EnvExtensions for Env {
             Asset::Stellar(address) => {
                 get_instance_storage(&self).set(&address, &index);
             }
-            Asset::Generic(symbol) => {
+            Asset::Other(symbol) => {
                 get_instance_storage(&self).set(&symbol, &index);
             }
         }
@@ -136,7 +171,7 @@ impl EnvExtensions for Env {
             Asset::Stellar(address) => {
                 index = get_instance_storage(self).get(&address);
             }
-            Asset::Generic(symbol) => {
+            Asset::Other(symbol) => {
                 index = get_instance_storage(self).get(&symbol);
             }
         }
@@ -152,29 +187,8 @@ impl EnvExtensions for Env {
         }
     }
 
-    fn get_base_asset(&self) -> Asset {
-        match Constants::BASE_ASSET_TYPE {
-            AssetType::Stellar => {
-                let asset_bytes = BytesN::from_array(self, &Constants::BASE);
-                let address = Address::from_contract_id(&asset_bytes);
-                return Asset::Stellar(address);
-            }
-            AssetType::Generic => {
-                //drop the trailing zeros
-                let first_zero_index = Constants::BASE
-                    .iter()
-                    .position(|&b| b == 0)
-                    .unwrap_or(Constants::BASE.len());
-                return Asset::Generic(Symbol::new(
-                    self,
-                    core::str::from_utf8(&Constants::BASE[..first_zero_index]).unwrap(),
-                ));
-            }
-        }
-    }
-
     fn bump(&self, ledgers_to_live: u32) {
-        get_instance_storage(&self).bump(ledgers_to_live, ledgers_to_live);
+        get_instance_storage(&self).extend_ttl(ledgers_to_live, ledgers_to_live);
     }
 
 }
