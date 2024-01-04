@@ -69,7 +69,7 @@ fn version_test() {
     let (_env, client, _init_data) = init_contract_with_admin();
     let result = client.version();
 
-    assert_eq!(result, 2);
+    assert_eq!(result, 3);
 }
 
 #[test]

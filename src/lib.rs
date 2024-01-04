@@ -16,70 +16,70 @@ pub struct PriceOracleContract;
 
 #[contractimpl]
 impl PriceOracleContract {
-    /// Returns the base asset the price is reported in.
-    ///
-    /// # Returns
-    ///
-    /// Base asset for the contract
+    // Returns the base asset the price is reported in.
+    //
+    // # Returns
+    //
+    // Base asset for the contract
     pub fn base(e: Env) -> Asset {
         e.get_base_asset()
     }
 
-    /// Returns the number of decimal places used to represent price for all assets quoted by the oracle.
-    ///
-    /// # Returns
-    ///
-    /// Number of decimals places in quoted prices
+    // Returns the number of decimal places used to represent price for all assets quoted by the oracle.
+    //
+    // # Returns
+    //
+    // Number of decimals places in quoted prices
     pub fn decimals(e: Env) -> u32 {
         e.get_decimals()
     }
 
-    /// Returns the default tick period timeframe (in seconds).
-    ///
-    /// # Returns
-    ///
-    /// Price feed resolution (in seconds)
+    // Returns the default tick period timeframe (in seconds).
+    //
+    // # Returns
+    //
+    // Price feed resolution (in seconds)
     pub fn resolution(e: Env) -> u32 {
         e.get_resolution() / 1000
     }
 
-    /// Returns the historical records retention period (in seconds).
-    ///
-    /// # Returns
-    ///
-    /// History retention period (in seconds)
+    // Returns the historical records retention period (in seconds).
+    //
+    // # Returns
+    //
+    // History retention period (in seconds)
     pub fn period(e: Env) -> Option<u64> {
         e.get_retention_period()
     }
 
-    /// Returns all assets quoted by the contract.
-    ///
-    /// # Returns
-    ///
-    /// Assets quoted by the contract
+    // Returns all assets quoted by the contract.
+    //
+    // # Returns
+    //
+    // Assets quoted by the contract
     pub fn assets(e: Env) -> Vec<Asset> {
         e.get_assets()
     }
 
-    /// Returns the most recent price update timestamp.
-    ///
-    /// # Returns
-    ///
-    /// Timestamp of the last recorded price update
+    // Returns the most recent price update timestamp.
+    //
+    // # Returns
+    //
+    // Timestamp of the last recorded price update
     pub fn last_timestamp(e: Env) -> u64 {
         e.get_last_timestamp()
     }
 
-    /// Returns price in base asset at specific timestamp.
-    ///
-    /// # Arguments
-    ///
-    /// * `asset` - Asset to quote
-    /// * `timestamp` - Timestamp
-    ///
-    /// # Returns
-    ///
-    /// Price record for the given asset at the given timestamp or None if the record was not found
+    // Returns price in base asset at specific timestamp.
+    //
+    // # Arguments
+    //
+    // * `asset` - Asset to quote
+    // * `timestamp` - Timestamp
+    //
+    // # Returns
+    //
+    // Price record for the given asset at the given timestamp or None if the record was not found
     pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         let resolution = e.get_resolution();
         let normalized_timestamp = timestamp.get_normalized_timestamp(resolution.into());
@@ -87,15 +87,15 @@ impl PriceOracleContract {
         get_price_data(&e, asset, normalized_timestamp)
     }
 
-    /// Returns the most recent price for an asset.
-    ///
-    /// # Arguments
-    ///
-    /// * `asset` - Asset to quote
-    ///
-    /// # Returns
-    ///
-    /// The most recent price for the given asset or None if the asset is not supported
+    // Returns the most recent price for an asset.
+    //
+    // # Arguments
+    //
+    // * `asset` - Asset to quote
+    //
+    // # Returns
+    //
+    // The most recent price for the given asset or None if the asset is not supported
     pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
         //get the last timestamp
         let timestamp = e.get_last_timestamp();
@@ -103,16 +103,16 @@ impl PriceOracleContract {
         get_price_data(&e, asset, timestamp)
     }
 
-    /// Returns last N price records for the given asset.
-    ///
-    /// # Arguments
-    ///
-    /// * `asset` - Asset to quote
-    /// * `records` - Number of records to return
-    ///
-    /// # Returns
-    ///
-    /// Prices for the given asset or None if the asset is not supported
+    // Returns last N price records for the given asset.
+    //
+    // # Arguments
+    //
+    // * `asset` - Asset to quote
+    // * `records` - Number of records to return
+    //
+    // # Returns
+    //
+    // Prices for the given asset or None if the asset is not supported
     pub fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
         if asset_index.is_none() {
@@ -125,33 +125,33 @@ impl PriceOracleContract {
         )
     }
 
-    /// Returns the most recent cross price record for the pair of assets.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_asset` - Base asset
-    /// * `quote_asset` - Quote asset
-    ///
-    /// # Returns
-    ///
-    /// The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
+    // Returns the most recent cross price record for the pair of assets.
+    //
+    // # Arguments
+    //
+    // * `base_asset` - Base asset
+    // * `quote_asset` - Quote asset
+    //
+    // # Returns
+    //
+    // The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
     pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
         let timestamp = e.get_last_timestamp();
         let decimals = e.get_decimals();
         get_x_price(&e, base_asset, quote_asset, timestamp, decimals)
     }
 
-    /// Returns the cross price for the pair of assets at specific timestamp.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_asset` - Base asset
-    /// * `quote_asset` - Quote asset
-    /// * `timestamp` - Timestamp
-    ///
-    /// # Returns
-    ///
-    /// Cross price (base_asset_price/quote_asset_price) at the given timestamp or None if there were no records found for quoted assets at specific timestamp
+    // Returns the cross price for the pair of assets at specific timestamp.
+    //
+    // # Arguments
+    //
+    // * `base_asset` - Base asset
+    // * `quote_asset` - Quote asset
+    // * `timestamp` - Timestamp
+    //
+    // # Returns
+    //
+    // Cross price (base_asset_price/quote_asset_price) at the given timestamp or None if there were no records found for quoted assets at specific timestamp
     pub fn x_price(
         e: Env,
         base_asset: Asset,
@@ -163,16 +163,16 @@ impl PriceOracleContract {
         get_x_price(&e, base_asset, quote_asset, normalized_timestamp, decimals)
     }
 
-    /// Returns last N cross price records of for the pair of assets.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_asset` - Base asset
-    /// * `quote_asset` - Quote asset
-    ///
-    /// # Returns
-    ///
-    /// Last N cross prices (base_asset_price/quote_asset_price) or None if there were no records found for quoted assets
+    // Returns last N cross price records of for the pair of assets.
+    //
+    // # Arguments
+    //
+    // * `base_asset` - Base asset
+    // * `quote_asset` - Quote asset
+    //
+    // # Returns
+    //
+    // Last N cross prices (base_asset_price/quote_asset_price) or None if there were no records found for quoted assets
     pub fn x_prices(
         e: Env,
         base_asset: Asset,
@@ -193,16 +193,16 @@ impl PriceOracleContract {
         )
     }
 
-    /// Returns the time-weighted average price for the given asset over N recent records.
-    ///
-    /// # Arguments
-    ///
-    /// * `asset` - Asset to quote
-    /// * `records` - Number of records to process
-    ///
-    /// # Returns
-    ///
-    /// TWAP for the given asset over N recent records or None if the asset is not supported
+    // Returns the time-weighted average price for the given asset over N recent records.
+    //
+    // # Arguments
+    //
+    // * `asset` - Asset to quote
+    // * `records` - Number of records to process
+    //
+    // # Returns
+    //
+    // TWAP for the given asset over N recent records or None if the asset is not supported
     pub fn twap(e: Env, asset: Asset, records: u32) -> Option<i128> {
         let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
         if asset_index.is_none() {
@@ -215,16 +215,16 @@ impl PriceOracleContract {
         )
     }
 
-    /// Returns the time-weighted average cross price for the given asset pair over N recent records.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_asset` - Base asset
-    /// * `quote_asset` - Quote asset
-    ///
-    /// # Returns
-    ///
-    /// TWAP (base_asset_price/quote_asset_price) or None if the assets are not supported.
+    // Returns the time-weighted average cross price for the given asset pair over N recent records.
+    //
+    // # Arguments
+    //
+    // * `base_asset` - Base asset
+    // * `quote_asset` - Quote asset
+    //
+    // # Returns
+    //
+    // TWAP (base_asset_price/quote_asset_price) or None if the assets are not supported.
     pub fn x_twap(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
         //get asset index to avoid multiple calls
         let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
@@ -241,11 +241,11 @@ impl PriceOracleContract {
         )
     }
 
-    /// Returns current protocol version of the contract.
-    ///
-    /// # Returns
-    ///
-    /// Contract protocol version
+    // Returns current protocol version of the contract.
+    //
+    // # Returns
+    //
+    // Contract protocol version
     pub fn version(_e: Env) -> u32 {
         env!("CARGO_PKG_VERSION")
             .split(".")
@@ -257,25 +257,25 @@ impl PriceOracleContract {
 
     //Admin section
 
-    /// Returns admin address of the contract.
-    ///
-    /// # Returns
-    ///
-    /// Contract admin account address
+    // Returns admin address of the contract.
+    //
+    // # Returns
+    //
+    // Contract admin account address
     pub fn admin(e: Env) -> Option<Address> {
         e.get_admin()
     }
 
-    /// Updates the contract configuration parameters. Can be invoked only by the admin account.
-    ///
-    /// # Arguments
-    ///
-    /// * `admin` - Admin account address
-    /// * `config` - Configuration parameters
-    ///
-    /// # Panics
-    ///
-    /// Panics if the contract is already initialized, or if the version is invalid
+    // Updates the contract configuration parameters. Can be invoked only by the admin account.
+    //
+    // # Arguments
+    //
+    // * `admin` - Admin account address
+    // * `config` - Configuration parameters
+    //
+    // # Panics
+    //
+    // Panics if the contract is already initialized, or if the version is invalid
     pub fn config(e: Env, admin: Address, config: ConfigData) {
         admin.require_auth();
         if e.is_initialized() {
@@ -290,62 +290,62 @@ impl PriceOracleContract {
         Self::__add_assets(&e, config.assets);
     }
 
-    /// Bumps the contract instance storage expiration to the given number of ledgers.
-    ///
-    /// # Arguments
-    ///
-    /// * `ledgers_to_live` - Extension period specified in ledgers count
-    ///
-    /// # Panics
-    ///
-    /// Panics if ledgers_to_live is invalid
+    // Bumps the contract instance storage expiration to the given number of ledgers.
+    //
+    // # Arguments
+    //
+    // * `ledgers_to_live` - Extension period specified in ledgers count
+    //
+    // # Panics
+    //
+    // Panics if ledgers_to_live is invalid
     pub fn bump(e: Env, ledgers_to_live: u32) {
         e.bump(ledgers_to_live);
     }
 
-    /// Adds given assets to the contract quoted assets list. Can be invoked only by the admin account.
-    ///
-    /// # Arguments
-    ///
-    /// * `admin` - Admin account address
-    /// * `assets` - Assets to add
-    /// * `version` - Configuration protocol version
-    ///
-    /// # Panics
-    ///
-    /// Panics if the caller doesn't match admin address, or if the assets are already added
+    // Adds given assets to the contract quoted assets list. Can be invoked only by the admin account.
+    //
+    // # Arguments
+    //
+    // * `admin` - Admin account address
+    // * `assets` - Assets to add
+    // * `version` - Configuration protocol version
+    //
+    // # Panics
+    //
+    // Panics if the caller doesn't match admin address, or if the assets are already added
     pub fn add_assets(e: Env, admin: Address, assets: Vec<Asset>) {
         e.panic_if_not_admin(&admin);
         Self::__add_assets(&e, assets);
     }
 
-    /// Sets history retention period for the prices. Can be invoked only by the admin account.
-    ///
-    /// # Arguments
-    ///
-    /// * `admin` - Admin account address
-    /// * `period` - History retention period (in seconds)
-    /// * `version` - Configuration protocol version
-    ///
-    /// # Panics
-    ///
-    /// Panics if the caller doesn't match admin address, or if the period/version is invalid
+    // Sets history retention period for the prices. Can be invoked only by the admin account.
+    //
+    // # Arguments
+    //
+    // * `admin` - Admin account address
+    // * `period` - History retention period (in seconds)
+    // * `version` - Configuration protocol version
+    //
+    // # Panics
+    //
+    // Panics if the caller doesn't match admin address, or if the period/version is invalid
     pub fn set_period(e: Env, admin: Address, period: u64) {
         e.panic_if_not_admin(&admin);
         e.set_retention_period(period);
     }
 
-    /// Record new price feed history snapshot. Can be invoked only by the admin account.
-    ///
-    /// # Arguments
-    ///
-    /// * `admin` - Admin account address
-    /// * `updates` - Price feed snapshot
-    /// * `timestamp` - History snapshot timestamp
-    ///
-    /// # Panics
-    ///
-    /// Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
+    // Record new price feed history snapshot. Can be invoked only by the admin account.
+    //
+    // # Arguments
+    //
+    // * `admin` - Admin account address
+    // * `updates` - Price feed snapshot
+    // * `timestamp` - History snapshot timestamp
+    //
+    // # Panics
+    //
+    // Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
     pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&admin);
 
@@ -367,16 +367,16 @@ impl PriceOracleContract {
         }
     }
 
-    /// Updates the contract source code. Can be invoked only by the admin account.
-    ///
-    /// # Arguments
-    ///
-    /// * `admin` - Admin account address
-    /// * `wasm_hash` - WASM hash of the contract source code
-    ///
-    /// # Panics
-    ///
-    /// Panics if the caller doesn't match admin address
+    // Updates the contract source code. Can be invoked only by the admin account.
+    //
+    // # Arguments
+    //
+    // * `admin` - Admin account address
+    // * `wasm_hash` - WASM hash of the contract source code
+    //
+    // # Panics
+    //
+    // Panics if the caller doesn't match admin address
     pub fn update_contract(env: Env, admin: Address, wasm_hash: BytesN<32>) {
         env.panic_if_not_admin(&admin);
         env.deployer().update_current_contract_wasm(wasm_hash)
