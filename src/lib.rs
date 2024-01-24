@@ -393,11 +393,11 @@ impl PriceOracleContract {
         let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);
         for asset in assets.iter() {
             //check if the asset has been already added
-            if has_asset(&presented_assets, &asset) {
+            if e.get_asset_index(asset.clone()).is_some() {
                 panic_with_error!(&e, Error::AssetAlreadyPresented);
             }
             presented_assets.push_back(asset.clone());
-            assets_indexes.push_back((asset, presented_assets.len() as u32 - 1));
+            assets_indexes.push_back((asset, presented_assets.len() - 1));
         }
 
         e.set_assets(presented_assets);
@@ -405,15 +405,6 @@ impl PriceOracleContract {
             e.set_asset_index(asset, index);
         }
     }
-}
-
-fn has_asset(assets: &Vec<Asset>, asset: &Asset) -> bool {
-    for current_asset in assets.iter() {
-        if &current_asset == asset {
-            return true;
-        }
-    }
-    false
 }
 
 fn prices<F: Fn(u64) -> Option<PriceData>>(
