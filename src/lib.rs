@@ -280,6 +280,9 @@ impl PriceOracleContract {
         admin.require_auth();
         if e.is_initialized() {
             e.panic_with_error(Error::AlreadyInitialized);
+        } 
+        if admin != config.admin {
+            e.panic_with_error(Error::Unauthorized);
         }
         e.set_admin(&config.admin);
         e.set_base_asset(&config.base_asset);
