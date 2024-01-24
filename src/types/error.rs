@@ -11,17 +11,11 @@ pub enum Error {
     /// The config assets doen't contain persistent asset. Delete assets is not supported.
     AssetMissing = 2,
     /// The asset is already added to the contract's list of supported assets.
-    AssetAlreadyPresented = 3,
+    AssetAlreadyExists = 3,
     /// The config version is invalid
     InvalidConfigVersion = 4,
     /// The prices timestamp is invalid
     InvalidTimestamp = 5,
     /// The assets update length or prices update length is invalid
-    InvalidUpdateLength = 6,
-    /// Deposit in unsupported asset
-    InvalidFeeAsset = 11,
-    /// Deposit amount has negative value
-    InvalidDepositAmount = 12,
-    /// Consumer has insufficient balance to pay the fee
-    InsufficientBalance = 13,
+    InvalidUpdateLength = 6
 }

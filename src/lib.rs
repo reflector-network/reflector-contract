@@ -117,7 +117,7 @@ impl PriceOracleContract {
     //
     // Prices for the given asset or None if the asset is not supported
     pub fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
-        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
+        let asset_index = e.get_asset_index(&asset); //get the asset index to avoid multiple calls
         if asset_index.is_none() {
             return None;
         }
@@ -210,7 +210,7 @@ impl PriceOracleContract {
     //
     // TWAP for the given asset over N recent records or None if the asset is not supported
     pub fn twap(e: Env, asset: Asset, records: u32) -> Option<i128> {
-        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
+        let asset_index = e.get_asset_index(&asset); //get the asset index to avoid multiple calls
         if asset_index.is_none() {
             return None;
         }
@@ -362,7 +362,7 @@ impl PriceOracleContract {
             panic_with_error!(&e, Error::InvalidUpdateLength);
         }
         let timeframe: u64 = e.get_resolution().into();
-        let ledger_timestamp = get_ledger_ms_timestamp(&e);
+        let ledger_timestamp = now(&e);
         if timestamp == 0 || !timestamp.is_valid_timestamp(timeframe) || timestamp > ledger_timestamp {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
@@ -410,8 +410,8 @@ impl PriceOracleContract {
         let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);
         for asset in assets.iter() {
             //check if the asset has been already added
-            if e.get_asset_index(asset.clone()).is_some() {
-                panic_with_error!(&e, Error::AssetAlreadyPresented);
+            if e.get_asset_index(&asset).is_some() {
+                panic_with_error!(&e, Error::AssetAlreadyExists);
             }
             presented_assets.push_back(asset.clone());
             assets_indexes.push_back((asset, presented_assets.len() - 1));
@@ -419,7 +419,7 @@ impl PriceOracleContract {
 
         e.set_assets(presented_assets);
         for (asset, index) in assets_indexes.iter() {
-            e.set_asset_index(asset, index);
+            e.set_asset_index(&asset, index);
         }
     }
 }
@@ -462,13 +462,13 @@ fn prices<F: Fn(u64) -> Option<PriceData>>(
     }
 }
 
-fn get_ledger_ms_timestamp(e: &Env) -> u64 {
+fn now(e: &Env) -> u64 {
     e.ledger().timestamp() * 1000 //convert to milliseconds
 }
 
 fn obtain_record_timestamp(e: &Env) -> u64 {
     let last_timestamp = e.get_last_timestamp();
-    let ledger_timestamp = get_ledger_ms_timestamp(&e);
+    let ledger_timestamp = now(&e);
     let resolution = e.get_resolution() as u64;
     if last_timestamp == 0 //no prices yet
         || last_timestamp > ledger_timestamp //last timestamp is in the future
@@ -550,12 +550,12 @@ fn get_x_price_by_indexes(
 }
 
 fn get_asset_pair_indexes(e: &Env, base_asset: Asset, quote_asset: Asset) -> Option<(u8, u8)> {
-    let base_asset = e.get_asset_index(base_asset);
+    let base_asset = e.get_asset_index(&base_asset);
     if base_asset.is_none() {
         return None;
     }
 
-    let quote_asset = e.get_asset_index(quote_asset);
+    let quote_asset = e.get_asset_index(&quote_asset);
     if quote_asset.is_none() {
         return None;
     }
@@ -564,7 +564,7 @@ fn get_asset_pair_indexes(e: &Env, base_asset: Asset, quote_asset: Asset) -> Opt
 }
 
 fn get_price_data(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
-    let asset: Option<u8> = e.get_asset_index(asset);
+    let asset: Option<u8> = e.get_asset_index(&asset);
     if asset.is_none() {
         return None;
     }
