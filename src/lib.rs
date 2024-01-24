@@ -98,7 +98,10 @@ impl PriceOracleContract {
     // The most recent price for the given asset or None if the asset is not supported
     pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
         //get the last timestamp
-        let timestamp = e.get_last_timestamp();
+        let timestamp = get_last_timestamp(&e);
+        if timestamp == 0 {
+            return None;
+        }
         //get the price
         get_price_data(&e, asset, timestamp)
     }
@@ -136,7 +139,10 @@ impl PriceOracleContract {
     //
     // The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
     pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
-        let timestamp = e.get_last_timestamp();
+        let timestamp = get_last_timestamp(&e);
+        if timestamp == 0 {
+            return None;
+        }
         let decimals = e.get_decimals();
         get_x_price(&e, base_asset, quote_asset, timestamp, decimals)
     }
@@ -352,7 +358,7 @@ impl PriceOracleContract {
     pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&admin);
         let timeframe: u64 = e.get_resolution().into();
-        let ledger_timestamp = e.ledger().timestamp() * 1000; //convert to milliseconds
+        let ledger_timestamp = get_ledger_ms_timestamp(&e);
         if timestamp == 0 || !timestamp.is_valid_timestamp(timeframe) || timestamp > ledger_timestamp {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
@@ -413,39 +419,56 @@ impl PriceOracleContract {
 fn prices<F: Fn(u64) -> Option<PriceData>>(
     e: &Env,
     get_price_fn: F,
-    records: u32,
+    mut records: u32,
 ) -> Option<Vec<PriceData>> {
-    //check if the asset is valid
-    let mut timestamp = e.get_last_timestamp();
+    // Check if the asset is valid
+    let mut timestamp = get_last_timestamp(e);
     if timestamp == 0 {
         return None;
     }
 
-    let mut prices = Vec::new(&e);
+    let mut prices = Vec::new(e);
     let resolution = e.get_resolution() as u64;
 
-    let mut records = records;
-    if records > 20 {
-        records = 20;
-    }
+    // Limit the number of records to 20
+    records = records.min(20);
 
-    for _ in 0..records {
-        let price = get_price_fn(timestamp);
-        if price.is_none() {
-            continue;
+    while records > 0 {
+        if let Some(price) = get_price_fn(timestamp) {
+            prices.push_back(price);
         }
-        prices.push_back(price.unwrap());
+
+        // Decrement records counter in every iteration
+        records -= 1;
+
         if timestamp < resolution {
             break;
         }
         timestamp -= resolution;
     }
 
-    if prices.len() == 0 {
-        return None;
+    if prices.is_empty() {
+        None
+    } else {
+        Some(prices)
     }
+}
 
-    Some(prices)
+fn get_ledger_ms_timestamp(e: &Env) -> u64 {
+    e.ledger().timestamp() * 1000 //convert to milliseconds
+}
+
+fn get_last_timestamp(e: &Env) -> u64 {
+    let last_timestamp = e.get_last_timestamp();
+    let ledger_timestamp = get_ledger_ms_timestamp(&e);
+    let resolution = e.get_resolution() as u64;
+    if last_timestamp == 0 //no prices yet
+        || last_timestamp > ledger_timestamp //last timestamp is in the future
+        || ledger_timestamp - last_timestamp >= resolution * 2 //last timestamp is too far in the past, so we cannot return the last price
+    {
+        return 0;
+    }
+    last_timestamp
 }
 
 fn get_twap<F: Fn(u64) -> Option<PriceData>>(

@@ -315,6 +315,25 @@ fn get_price_test() {
 }
 
 #[test]
+fn get_lastprice_delayed_update_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 300_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    client.set_price(&admin, &updates, &timestamp);
+
+    //check last prices
+    let result = client.lastprice(&assets.get_unchecked(1));
+    assert_eq!(result, None);
+}
+
+#[test]
 fn get_x_last_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
@@ -428,7 +447,8 @@ fn x_twap_test() {
     let admin = &init_data.admin;
     let assets = init_data.assets;
 
-    let timestamp = 600_000;
+    //set prices for assets with gap
+    let timestamp = 300_000;
     let updates = get_updates(&env, &assets, normalize_price(100));
 
     env.mock_all_auths();
@@ -445,7 +465,7 @@ fn x_twap_test() {
     let result = client.x_twap(
         &assets.get_unchecked(1),
         &assets.get_unchecked(2),
-        &2,
+        &3,
     );
 
     assert_ne!(result, None);
