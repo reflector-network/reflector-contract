@@ -348,6 +348,11 @@ impl PriceOracleContract {
     // Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
     pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&admin);
+        let timeframe: u64 = e.get_resolution().into();
+        let ledger_timestamp = e.ledger().timestamp() * 1000; //convert to milliseconds
+        if timestamp == 0 || !timestamp.is_valid_timestamp(timeframe) || timestamp > ledger_timestamp {
+            panic_with_error!(&e, Error::InvalidTimestamp);
+        }
 
         let retention_period = e.get_retention_period().unwrap();
 

@@ -4,7 +4,7 @@ extern crate alloc;
 
 use super::*;
 use alloc::string::ToString;
-use soroban_sdk::{testutils::Address as _, Address, Env, Symbol, String};
+use soroban_sdk::{testutils::{Address as _, Ledger, LedgerInfo}, Address, Env, Symbol, String};
 
 use {extensions::{u64_extensions::U64Extensions, i128_extensions::I128Extensions}, types::asset::Asset};
 
@@ -13,6 +13,13 @@ const DECIMALS: u32 = 14;
 
 fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
     let env = Env::default();
+
+    //set timestamp to 900 seconds
+    let ledger_info = env.ledger().get();
+    env.ledger().set(LedgerInfo {
+        timestamp: 900,
+        ..ledger_info
+    });
 
     let admin = Address::generate(&env);
 
@@ -100,6 +107,73 @@ fn bump_test() {
     let (_env, client, _init_data) = init_contract_with_admin();
 
     client.bump(&6_000_000);
+}
+
+#[test]
+fn set_price_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 600_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
+#[should_panic]
+fn set_price_zero_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 0;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
+#[should_panic]
+fn set_price_invalid_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 600_001;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
+#[should_panic]
+fn set_price_future_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 1_200_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
 }
 
 #[test]

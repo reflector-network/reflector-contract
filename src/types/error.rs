@@ -14,6 +14,8 @@ pub enum Error {
     AssetAlreadyPresented = 3,
     /// The config version is invalid
     InvalidConfigVersion = 4,
+    /// The prices timestamp is invalid
+    InvalidTimestamp = 5,
     /// Deposit in unsupported asset
     InvalidFeeAsset = 11,
     /// Deposit amount has negative value
