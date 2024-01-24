@@ -98,7 +98,7 @@ impl PriceOracleContract {
     // The most recent price for the given asset or None if the asset is not supported
     pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
         //get the last timestamp
-        let timestamp = get_last_timestamp(&e);
+        let timestamp = obtain_record_timestamp(&e);
         if timestamp == 0 {
             return None;
         }
@@ -139,7 +139,7 @@ impl PriceOracleContract {
     //
     // The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
     pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
-        let timestamp = get_last_timestamp(&e);
+        let timestamp = obtain_record_timestamp(&e);
         if timestamp == 0 {
             return None;
         }
@@ -430,7 +430,7 @@ fn prices<F: Fn(u64) -> Option<PriceData>>(
     mut records: u32,
 ) -> Option<Vec<PriceData>> {
     // Check if the asset is valid
-    let mut timestamp = get_last_timestamp(e);
+    let mut timestamp = obtain_record_timestamp(e);
     if timestamp == 0 {
         return None;
     }
@@ -466,7 +466,7 @@ fn get_ledger_ms_timestamp(e: &Env) -> u64 {
     e.ledger().timestamp() * 1000 //convert to milliseconds
 }
 
-fn get_last_timestamp(e: &Env) -> u64 {
+fn obtain_record_timestamp(e: &Env) -> u64 {
     let last_timestamp = e.get_last_timestamp();
     let ledger_timestamp = get_ledger_ms_timestamp(&e);
     let resolution = e.get_resolution() as u64;
