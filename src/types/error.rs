@@ -16,6 +16,8 @@ pub enum Error {
     InvalidConfigVersion = 4,
     /// The prices timestamp is invalid
     InvalidTimestamp = 5,
+    /// The assets update length or prices update length is invalid
+    InvalidUpdateLength = 6,
     /// Deposit in unsupported asset
     InvalidFeeAsset = 11,
     /// Deposit amount has negative value

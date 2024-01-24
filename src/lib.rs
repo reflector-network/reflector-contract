@@ -357,6 +357,10 @@ impl PriceOracleContract {
     // Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
     pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&admin);
+        let updates_len = updates.len();
+        if updates_len == 0 || updates_len >= 256 {
+            panic_with_error!(&e, Error::InvalidUpdateLength);
+        }
         let timeframe: u64 = e.get_resolution().into();
         let ledger_timestamp = get_ledger_ms_timestamp(&e);
         if timestamp == 0 || !timestamp.is_valid_timestamp(timeframe) || timestamp > ledger_timestamp {
@@ -397,6 +401,10 @@ impl PriceOracleContract {
     }
 
     fn __add_assets(e: &Env, assets: Vec<Asset>) {
+        let assets_len = assets.len();
+        if assets_len == 0 || assets_len >= 256 {
+            panic_with_error!(&e, Error::InvalidUpdateLength);
+        }
         let mut presented_assets = e.get_assets();
 
         let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);

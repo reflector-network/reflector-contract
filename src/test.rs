@@ -256,6 +256,43 @@ fn add_assets_test() {
 }
 
 #[test]
+#[should_panic]
+fn assets_update_overflow_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+    
+    env.mock_all_auths();
+
+    env.budget().reset_unlimited();
+    
+    let admin = &init_data.admin;
+
+    let mut assets = Vec::new(&env);
+    for i in 1..=256 {
+        assets.push_back(Asset::Other(Symbol::new(&env, &("Asset".to_string() + &i.to_string()))));
+    }
+
+    client.add_assets(&admin, &assets);
+}
+
+#[test]
+#[should_panic]
+fn prices_update_overflow_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+    
+    env.mock_all_auths();
+
+    env.budget().reset_unlimited();
+    
+    let admin = &init_data.admin;
+
+    let mut updates = Vec::new(&env);
+    for i in 1..=256 {
+        updates.push_back(normalize_price(i as i128 + 1));
+    }
+    client.set_price(&admin, &updates, &600_000);
+}
+
+#[test]
 fn set_period_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
