@@ -477,19 +477,23 @@ fn get_twap<F: Fn(u64) -> Option<PriceData>>(
     get_price_fn: F,
     records: u32,
 ) -> Option<i128> {
-    let prices_result = prices(&e, get_price_fn, records);
-    if prices_result.is_none() {
+    let prices = prices(&e, get_price_fn, records)?;
+
+    if prices.len() != records {
         return None;
     }
 
-    let prices = prices_result.unwrap();
+    let last_price_timestamp = prices.first()?.timestamp;
+    let timeframe = e.get_resolution() as u64;
+    let current_time = now(&e);
 
-    let mut sum = 0;
-    for price_data in prices.iter() {
-        sum += price_data.price;
+    //check if the last price is too old
+    if last_price_timestamp + timeframe + 60 * 1000 < current_time { 
+        return None;
     }
 
-    Some(sum / (prices.len() as i128))
+    let sum: i128 = prices.iter().map(|price_data| price_data.price).sum();
+    Some(sum / prices.len() as i128)
 }
 
 fn get_x_price(

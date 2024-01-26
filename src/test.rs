@@ -503,6 +503,39 @@ fn x_twap_test() {
     let admin = &init_data.admin;
     let assets = init_data.assets;
 
+    //set prices for assets
+    let timestamp = 600_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+
+    let timestamp = 900_000;
+    let updates = get_updates(&env, &assets, normalize_price(200));
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+
+    let result = client.x_twap(
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
+        &2,
+    );
+
+    assert_ne!(result, None);
+    assert_eq!(result.unwrap(), normalize_price(1));
+}
+
+#[test]
+#[should_panic]
+fn x_twap_with_gap_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
     //set prices for assets with gap
     let timestamp = 300_000;
     let updates = get_updates(&env, &assets, normalize_price(100));
