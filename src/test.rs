@@ -255,6 +255,25 @@ fn add_assets_test() {
     assert_eq!(result, expected_assets);
 }
 
+
+
+#[test]
+#[should_panic]
+fn add_assets_duplicate_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+
+    let mut assets = Vec::new(&env);
+    let duplicate_asset = Asset::Other(Symbol::new(&env, &("ASSET_DUPLICATE")));
+    assets.push_back(duplicate_asset.clone());
+    assets.push_back(duplicate_asset);
+
+    env.mock_all_auths();
+
+    client.add_assets(&admin, &assets);
+}
+
 #[test]
 #[should_panic]
 fn assets_update_overflow_test() {

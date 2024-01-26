@@ -401,26 +401,19 @@ impl PriceOracleContract {
     }
 
     fn __add_assets(e: &Env, assets: Vec<Asset>) {
-        let assets_len = assets.len();
-        if assets_len == 0 || assets_len >= 256 {
-            panic_with_error!(&e, Error::InvalidUpdateLength);
-        }
-        let mut presented_assets = e.get_assets();
-
-        let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);
+        let mut current_assets = e.get_assets();
         for asset in assets.iter() {
             //check if the asset has been already added
             if e.get_asset_index(&asset).is_some() {
                 panic_with_error!(&e, Error::AssetAlreadyExists);
             }
-            presented_assets.push_back(asset.clone());
-            assets_indexes.push_back((asset, presented_assets.len() - 1));
+            e.set_asset_index(&asset, current_assets.len());
+            current_assets.push_back(asset);
         }
-
-        e.set_assets(presented_assets);
-        for (asset, index) in assets_indexes.iter() {
-            e.set_asset_index(&asset, index);
+        if current_assets.len() >= 256 {
+            panic_with_error!(&e, Error::AssetLimitExceeded);
         }
+        e.set_assets(current_assets);
     }
 }
 

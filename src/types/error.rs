@@ -17,5 +17,7 @@ pub enum Error {
     /// The prices timestamp is invalid
     InvalidTimestamp = 5,
     /// The assets update length or prices update length is invalid
-    InvalidUpdateLength = 6
+    InvalidUpdateLength = 6,
+    /// The assets storage is full
+    AssetLimitExceeded = 7
 }
