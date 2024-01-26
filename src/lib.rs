@@ -376,6 +376,10 @@ impl PriceOracleContract {
 
         //iterate over the updates
         for (i, price) in updates.iter().enumerate() {
+            //don't store zero prices
+            if price == 0 {
+                continue;
+            }
             let asset = i as u8;
             //store the new price
             e.set_price(asset, price, timestamp, ledgers_to_live);

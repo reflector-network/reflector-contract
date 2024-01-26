@@ -23,9 +23,6 @@ impl I128Extensions for i128 {
 }
 
 fn div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
-    if (dividend == 0) || (divisor == 0) {
-        0_i128;
-    }
     let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
     let bshift = core::cmp::max(decimals - ashift, 0);
     

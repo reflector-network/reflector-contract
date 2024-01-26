@@ -418,6 +418,32 @@ fn get_x_last_price_test() {
     );
 }
 
+
+
+
+
+
+#[test]
+fn get_x_price_with_zero_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 600_000;
+    let mut updates = get_updates(&env, &assets, normalize_price(100));
+    updates.set(1, 0);
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+
+    let result = client.x_price(&assets.get(0).unwrap(), &assets.get(1).unwrap(), &timestamp);
+
+    assert_eq!(result, None);
+}
+
 #[test]
 fn get_x_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
