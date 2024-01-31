@@ -1,7 +1,39 @@
-
 pub trait I128Extensions {
+
+    // Divides two i128 numbers, considering decimal places.
+    //
+    // Arguments:
+    // - self: The dividend.
+    // - y: The divisor. Should not be zero; will cause panic if zero.
+    // - decimals: Number of decimal places for division.
+    //
+    // Behavior:
+    // - Rounds up towards zero for negative results.
+    //
+    // Panic:
+    // - If divisor (y) is zero.
+    //
+    // Returns:
+    // - Division result with specified rounding behavior.
     fn fixed_div_floor(self, y: i128, decimals: u32) -> i128;
+
+    // Encodes a pair of values (u64 and u8) into a single u128 value.
+    //
+    // Arguments:
+    // - val_u64: The first value, a u64, to be encoded.
+    // - val_u8: The second value, a u8, to be encoded.
+    //
+    // Returns:
+    // - A u128 value combining the u64 and u8 values.
     fn encode_to_u128(val_u64: u64, val_u8: u8) -> u128;
+
+    // Decodes a u128 value into a tuple of (u64, u8).
+    //
+    // Arguments:
+    // - val: The u128 value to be decoded.
+    //
+    // Returns:
+    // - A tuple consisting of a u64 and u8, extracted from the u128 value.
     fn decode_from_u128(val: u128) -> (u64, u8);
 }
 
@@ -34,5 +66,5 @@ fn div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
     if bshift > 0 {
         vdivisor /= 10_i128.pow(bshift);
     }
-    vdividend/vdivisor
+    vdividend / vdivisor
 }
