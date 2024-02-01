@@ -11,7 +11,7 @@ pub trait I128Extensions {
     // - Rounds up towards zero for negative results.
     //
     // Panic:
-    // - If divisor (y) is zero.
+    // - If dividend (self) or divisor (y) is zero.
     //
     // Returns:
     // - Division result with specified rounding behavior.
@@ -55,6 +55,9 @@ impl I128Extensions for i128 {
 }
 
 fn div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
+    if dividend <= 0 || divisor <= 0 {
+        panic!("invalid division arguments")
+    }
     let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
     let bshift = core::cmp::max(decimals - ashift, 0);
     

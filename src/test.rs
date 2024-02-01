@@ -5,6 +5,7 @@ extern crate alloc;
 use super::*;
 use alloc::string::ToString;
 use soroban_sdk::{testutils::{Address as _, Ledger, LedgerInfo}, Address, Env, Symbol, String};
+use std::panic::{self, AssertUnwindSafe};
 
 use {extensions::{u64_extensions::U64Extensions, i128_extensions::I128Extensions}, types::asset::Asset};
 
@@ -651,11 +652,22 @@ fn div_tests() {
     let test_cases = [
         (154467226919499, 133928752749774, 115335373284703),
         (i128::MAX/100, 231731687303715884105728, 734216306110962248249052545),
-        (231731687303715884105728, i128::MAX/100, 13)
+        (231731687303715884105728, i128::MAX/100, 13),
+        // -1 expected result for errors
+        (1, 0, -1),
+        (0, 1, -1),
+        (0, 0, -1),
+        (-1, 0, -1),
+        (0, -1, -1),
+        (-1, -1, -1),
     ];
 
     for (a, b, expected) in test_cases.iter() {
-        let result = a.fixed_div_floor(*b, 14);
-        assert_eq!(result, *expected);
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {a.fixed_div_floor(*b, 14)}));
+        if expected == &-1 {
+            assert!(result.is_err());
+        } else {
+            assert_eq!(result.unwrap(), *expected);
+        }
     }
 }
