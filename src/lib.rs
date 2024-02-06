@@ -98,7 +98,10 @@ impl PriceOracleContract {
     // The most recent price for the given asset or None if the asset is not supported
     pub fn lastprice(e: Env, asset: Asset) -> Option<PriceData> {
         //get the last timestamp
-        let timestamp = e.get_last_timestamp();
+        let timestamp = obtain_record_timestamp(&e);
+        if timestamp == 0 {
+            return None;
+        }
         //get the price
         get_price_data(&e, asset, timestamp)
     }
@@ -114,7 +117,7 @@ impl PriceOracleContract {
     //
     // Prices for the given asset or None if the asset is not supported
     pub fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
-        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
+        let asset_index = e.get_asset_index(&asset); //get the asset index to avoid multiple calls
         if asset_index.is_none() {
             return None;
         }
@@ -136,7 +139,10 @@ impl PriceOracleContract {
     //
     // The most recent cross price (base_asset_price/quote_asset_price) for the given assets or None if if there were no records found for quoted asset
     pub fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
-        let timestamp = e.get_last_timestamp();
+        let timestamp = obtain_record_timestamp(&e);
+        if timestamp == 0 {
+            return None;
+        }
         let decimals = e.get_decimals();
         get_x_price(&e, base_asset, quote_asset, timestamp, decimals)
     }
@@ -204,7 +210,7 @@ impl PriceOracleContract {
     //
     // TWAP for the given asset over N recent records or None if the asset is not supported
     pub fn twap(e: Env, asset: Asset, records: u32) -> Option<i128> {
-        let asset_index = e.get_asset_index(asset); //get the asset index to avoid multiple calls
+        let asset_index = e.get_asset_index(&asset); //get the asset index to avoid multiple calls
         if asset_index.is_none() {
             return None;
         }
@@ -280,6 +286,9 @@ impl PriceOracleContract {
         admin.require_auth();
         if e.is_initialized() {
             e.panic_with_error(Error::AlreadyInitialized);
+        } 
+        if admin != config.admin {
+            e.panic_with_error(Error::Unauthorized);
         }
         e.set_admin(&config.admin);
         e.set_base_asset(&config.base_asset);
@@ -348,6 +357,15 @@ impl PriceOracleContract {
     // Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
     pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
         e.panic_if_not_admin(&admin);
+        let updates_len = updates.len();
+        if updates_len == 0 || updates_len >= 256 {
+            panic_with_error!(&e, Error::InvalidUpdateLength);
+        }
+        let timeframe: u64 = e.get_resolution().into();
+        let ledger_timestamp = now(&e);
+        if timestamp == 0 || !timestamp.is_valid_timestamp(timeframe) || timestamp > ledger_timestamp {
+            panic_with_error!(&e, Error::InvalidTimestamp);
+        }
 
         let retention_period = e.get_retention_period().unwrap();
 
@@ -358,6 +376,10 @@ impl PriceOracleContract {
 
         //iterate over the updates
         for (i, price) in updates.iter().enumerate() {
+            //don't store zero prices
+            if price == 0 {
+                continue;
+            }
             let asset = i as u8;
             //store the new price
             e.set_price(asset, price, timestamp, ledgers_to_live);
@@ -383,70 +405,75 @@ impl PriceOracleContract {
     }
 
     fn __add_assets(e: &Env, assets: Vec<Asset>) {
-        let mut presented_assets = e.get_assets();
-
-        let mut assets_indexes: Vec<(Asset, u32)> = Vec::new(&e);
+        let mut current_assets = e.get_assets();
         for asset in assets.iter() {
             //check if the asset has been already added
-            if has_asset(&presented_assets, &asset) {
-                panic_with_error!(&e, Error::AssetAlreadyPresented);
+            if e.get_asset_index(&asset).is_some() {
+                panic_with_error!(&e, Error::AssetAlreadyExists);
             }
-            presented_assets.push_back(asset.clone());
-            assets_indexes.push_back((asset, presented_assets.len() as u32 - 1));
+            e.set_asset_index(&asset, current_assets.len());
+            current_assets.push_back(asset);
         }
-
-        e.set_assets(presented_assets);
-        for (asset, index) in assets_indexes.iter() {
-            e.set_asset_index(asset, index);
+        if current_assets.len() >= 256 {
+            panic_with_error!(&e, Error::AssetLimitExceeded);
         }
+        e.set_assets(current_assets);
     }
-}
-
-fn has_asset(assets: &Vec<Asset>, asset: &Asset) -> bool {
-    for current_asset in assets.iter() {
-        if &current_asset == asset {
-            return true;
-        }
-    }
-    false
 }
 
 fn prices<F: Fn(u64) -> Option<PriceData>>(
     e: &Env,
     get_price_fn: F,
-    records: u32,
+    mut records: u32,
 ) -> Option<Vec<PriceData>> {
-    //check if the asset is valid
-    let mut timestamp = e.get_last_timestamp();
+    // Check if the asset is valid
+    let mut timestamp = obtain_record_timestamp(e);
     if timestamp == 0 {
         return None;
     }
 
-    let mut prices = Vec::new(&e);
+    let mut prices = Vec::new(e);
     let resolution = e.get_resolution() as u64;
 
-    let mut records = records;
-    if records > 20 {
-        records = 20;
-    }
+    // Limit the number of records to 20
+    records = records.min(20);
 
-    for _ in 0..records {
-        let price = get_price_fn(timestamp);
-        if price.is_none() {
-            continue;
+    while records > 0 {
+        if let Some(price) = get_price_fn(timestamp) {
+            prices.push_back(price);
         }
-        prices.push_back(price.unwrap());
+
+        // Decrement records counter in every iteration
+        records -= 1;
+
         if timestamp < resolution {
             break;
         }
         timestamp -= resolution;
     }
 
-    if prices.len() == 0 {
-        return None;
+    if prices.is_empty() {
+        None
+    } else {
+        Some(prices)
     }
+}
 
-    Some(prices)
+fn now(e: &Env) -> u64 {
+    e.ledger().timestamp() * 1000 //convert to milliseconds
+}
+
+fn obtain_record_timestamp(e: &Env) -> u64 {
+    let last_timestamp = e.get_last_timestamp();
+    let ledger_timestamp = now(&e);
+    let resolution = e.get_resolution() as u64;
+    if last_timestamp == 0 //no prices yet
+        || last_timestamp > ledger_timestamp //last timestamp is in the future
+        || ledger_timestamp - last_timestamp >= resolution * 2 //last timestamp is too far in the past, so we cannot return the last price
+    {
+        return 0;
+    }
+    last_timestamp
 }
 
 fn get_twap<F: Fn(u64) -> Option<PriceData>>(
@@ -454,19 +481,23 @@ fn get_twap<F: Fn(u64) -> Option<PriceData>>(
     get_price_fn: F,
     records: u32,
 ) -> Option<i128> {
-    let prices_result = prices(&e, get_price_fn, records);
-    if prices_result.is_none() {
+    let prices = prices(&e, get_price_fn, records)?;
+
+    if prices.len() != records {
         return None;
     }
 
-    let prices = prices_result.unwrap();
+    let last_price_timestamp = prices.first()?.timestamp;
+    let timeframe = e.get_resolution() as u64;
+    let current_time = now(&e);
 
-    let mut sum = 0;
-    for price_data in prices.iter() {
-        sum += price_data.price;
+    //check if the last price is too old
+    if last_price_timestamp + timeframe + 60 * 1000 < current_time { 
+        return None;
     }
 
-    Some(sum / (prices.len() as i128))
+    let sum: i128 = prices.iter().map(|price_data| price_data.price).sum();
+    Some(sum / prices.len() as i128)
 }
 
 fn get_x_price(
@@ -520,12 +551,12 @@ fn get_x_price_by_indexes(
 }
 
 fn get_asset_pair_indexes(e: &Env, base_asset: Asset, quote_asset: Asset) -> Option<(u8, u8)> {
-    let base_asset = e.get_asset_index(base_asset);
+    let base_asset = e.get_asset_index(&base_asset);
     if base_asset.is_none() {
         return None;
     }
 
-    let quote_asset = e.get_asset_index(quote_asset);
+    let quote_asset = e.get_asset_index(&quote_asset);
     if quote_asset.is_none() {
         return None;
     }
@@ -534,7 +565,7 @@ fn get_asset_pair_indexes(e: &Env, base_asset: Asset, quote_asset: Asset) -> Opt
 }
 
 fn get_price_data(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
-    let asset: Option<u8> = e.get_asset_index(asset);
+    let asset: Option<u8> = e.get_asset_index(&asset);
     if asset.is_none() {
         return None;
     }

@@ -50,9 +50,9 @@ pub trait EnvExtensions {
 
     fn set_assets(&self, assets: Vec<Asset>);
 
-    fn set_asset_index(&self, asset: Asset, index: u32);
+    fn set_asset_index(&self, asset: &Asset, index: u32);
 
-    fn get_asset_index(&self, asset: Asset) -> Option<u8>;
+    fn get_asset_index(&self, asset: &Asset) -> Option<u8>;
 
     fn panic_if_not_admin(&self, invoker: &Address);
 
@@ -154,7 +154,7 @@ impl EnvExtensions for Env {
         get_instance_storage(&self).set(&ASSETS, &assets);
     }
 
-    fn set_asset_index(&self, asset: Asset, index: u32) {
+    fn set_asset_index(&self, asset: &Asset, index: u32) {
         match asset {
             Asset::Stellar(address) => {
                 get_instance_storage(&self).set(&address, &index);
@@ -165,7 +165,7 @@ impl EnvExtensions for Env {
         }
     }
 
-    fn get_asset_index(&self, asset: Asset) -> Option<u8> {
+    fn get_asset_index(&self, asset: &Asset) -> Option<u8> {
         let index: Option<u32>;
         match asset {
             Asset::Stellar(address) => {

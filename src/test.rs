@@ -4,7 +4,8 @@ extern crate alloc;
 
 use super::*;
 use alloc::string::ToString;
-use soroban_sdk::{testutils::Address as _, Address, Env, Symbol, String};
+use soroban_sdk::{testutils::{Address as _, Ledger, LedgerInfo}, Address, Env, Symbol, String};
+use std::panic::{self, AssertUnwindSafe};
 
 use {extensions::{u64_extensions::U64Extensions, i128_extensions::I128Extensions}, types::asset::Asset};
 
@@ -13,6 +14,13 @@ const DECIMALS: u32 = 14;
 
 fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
     let env = Env::default();
+
+    //set timestamp to 900 seconds
+    let ledger_info = env.ledger().get();
+    env.ledger().set(LedgerInfo {
+        timestamp: 900,
+        ..ledger_info
+    });
 
     let admin = Address::generate(&env);
 
@@ -103,6 +111,73 @@ fn bump_test() {
 }
 
 #[test]
+fn set_price_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 600_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
+#[should_panic]
+fn set_price_zero_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 0;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
+#[should_panic]
+fn set_price_invalid_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 600_001;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
+#[should_panic]
+fn set_price_future_timestamp_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 1_200_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+}
+
+#[test]
 fn last_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
@@ -181,6 +256,62 @@ fn add_assets_test() {
     assert_eq!(result, expected_assets);
 }
 
+
+
+#[test]
+#[should_panic]
+fn add_assets_duplicate_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+
+    let mut assets = Vec::new(&env);
+    let duplicate_asset = Asset::Other(Symbol::new(&env, &("ASSET_DUPLICATE")));
+    assets.push_back(duplicate_asset.clone());
+    assets.push_back(duplicate_asset);
+
+    env.mock_all_auths();
+
+    client.add_assets(&admin, &assets);
+}
+
+#[test]
+#[should_panic]
+fn assets_update_overflow_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+    
+    env.mock_all_auths();
+
+    env.budget().reset_unlimited();
+    
+    let admin = &init_data.admin;
+
+    let mut assets = Vec::new(&env);
+    for i in 1..=256 {
+        assets.push_back(Asset::Other(Symbol::new(&env, &("Asset".to_string() + &i.to_string()))));
+    }
+
+    client.add_assets(&admin, &assets);
+}
+
+#[test]
+#[should_panic]
+fn prices_update_overflow_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+    
+    env.mock_all_auths();
+
+    env.budget().reset_unlimited();
+    
+    let admin = &init_data.admin;
+
+    let mut updates = Vec::new(&env);
+    for i in 1..=256 {
+        updates.push_back(normalize_price(i as i128 + 1));
+    }
+    client.set_price(&admin, &updates, &600_000);
+}
+
 #[test]
 fn set_period_test() {
     let (env, client, init_data) = init_contract_with_admin();
@@ -241,6 +372,25 @@ fn get_price_test() {
 }
 
 #[test]
+fn get_lastprice_delayed_update_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 300_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    client.set_price(&admin, &updates, &timestamp);
+
+    //check last prices
+    let result = client.lastprice(&assets.get_unchecked(1));
+    assert_eq!(result, None);
+}
+
+#[test]
 fn get_x_last_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
@@ -267,6 +417,32 @@ fn get_x_last_price_test() {
             timestamp: 600_000 as u64
         })
     );
+}
+
+
+
+
+
+
+#[test]
+fn get_x_price_with_zero_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    let timestamp = 600_000;
+    let mut updates = get_updates(&env, &assets, normalize_price(100));
+    updates.set(1, 0);
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+
+    let result = client.x_price(&assets.get(0).unwrap(), &assets.get(1).unwrap(), &timestamp);
+
+    assert_eq!(result, None);
 }
 
 #[test]
@@ -354,6 +530,7 @@ fn x_twap_test() {
     let admin = &init_data.admin;
     let assets = init_data.assets;
 
+    //set prices for assets
     let timestamp = 600_000;
     let updates = get_updates(&env, &assets, normalize_price(100));
 
@@ -372,6 +549,39 @@ fn x_twap_test() {
         &assets.get_unchecked(1),
         &assets.get_unchecked(2),
         &2,
+    );
+
+    assert_ne!(result, None);
+    assert_eq!(result.unwrap(), normalize_price(1));
+}
+
+#[test]
+#[should_panic]
+fn x_twap_with_gap_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let admin = &init_data.admin;
+    let assets = init_data.assets;
+
+    //set prices for assets with gap
+    let timestamp = 300_000;
+    let updates = get_updates(&env, &assets, normalize_price(100));
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+
+    let timestamp = 900_000;
+    let updates = get_updates(&env, &assets, normalize_price(200));
+
+    //set prices for assets
+    client.set_price(&admin, &updates, &timestamp);
+
+    let result = client.x_twap(
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
+        &3,
     );
 
     assert_ne!(result, None);
@@ -442,11 +652,22 @@ fn div_tests() {
     let test_cases = [
         (154467226919499, 133928752749774, 115335373284703),
         (i128::MAX/100, 231731687303715884105728, 734216306110962248249052545),
-        (231731687303715884105728, i128::MAX/100, 13)
+        (231731687303715884105728, i128::MAX/100, 13),
+        // -1 expected result for errors
+        (1, 0, -1),
+        (0, 1, -1),
+        (0, 0, -1),
+        (-1, 0, -1),
+        (0, -1, -1),
+        (-1, -1, -1),
     ];
 
     for (a, b, expected) in test_cases.iter() {
-        let result = a.fixed_div_floor(*b, 14);
-        assert_eq!(result, *expected);
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {a.fixed_div_floor(*b, 14)}));
+        if expected == &-1 {
+            assert!(result.is_err());
+        } else {
+            assert_eq!(result.unwrap(), *expected);
+        }
     }
 }
