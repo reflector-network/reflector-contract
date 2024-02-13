@@ -282,14 +282,11 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the contract is already initialized, or if the version is invalid
-    pub fn config(e: Env, admin: Address, config: ConfigData) {
-        admin.require_auth();
+    pub fn config(e: Env, config: ConfigData) {
+        config.admin.require_auth();
         if e.is_initialized() {
             e.panic_with_error(Error::AlreadyInitialized);
         } 
-        if admin != config.admin {
-            e.panic_with_error(Error::Unauthorized);
-        }
         e.set_admin(&config.admin);
         e.set_base_asset(&config.base_asset);
         e.set_decimals(config.decimals);
@@ -323,8 +320,8 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address, or if the assets are already added
-    pub fn add_assets(e: Env, admin: Address, assets: Vec<Asset>) {
-        e.panic_if_not_admin(&admin);
+    pub fn add_assets(e: Env, assets: Vec<Asset>) {
+        e.panic_if_not_admin();
         Self::__add_assets(&e, assets);
     }
 
@@ -339,8 +336,8 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address, or if the period/version is invalid
-    pub fn set_period(e: Env, admin: Address, period: u64) {
-        e.panic_if_not_admin(&admin);
+    pub fn set_period(e: Env, period: u64) {
+        e.panic_if_not_admin();
         e.set_retention_period(period);
     }
 
@@ -355,8 +352,8 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address, or if the price snapshot record is invalid
-    pub fn set_price(e: Env, admin: Address, updates: Vec<i128>, timestamp: u64) {
-        e.panic_if_not_admin(&admin);
+    pub fn set_price(e: Env, updates: Vec<i128>, timestamp: u64) {
+        e.panic_if_not_admin();
         let updates_len = updates.len();
         if updates_len == 0 || updates_len >= 256 {
             panic_with_error!(&e, Error::InvalidUpdateLength);
@@ -399,8 +396,8 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address
-    pub fn update_contract(env: Env, admin: Address, wasm_hash: BytesN<32>) {
-        env.panic_if_not_admin(&admin);
+    pub fn update_contract(env: Env, wasm_hash: BytesN<32>) {
+        env.panic_if_not_admin();
         env.deployer().update_current_contract_wasm(wasm_hash)
     }
 
