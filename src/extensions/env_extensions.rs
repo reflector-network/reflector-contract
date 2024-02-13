@@ -16,8 +16,6 @@ const DECIMALS: &str = "decimals";
 const RESOLUTION: &str = "resolution";
 
 pub trait EnvExtensions {
-    fn is_authorized(&self, invoker: &Address) -> bool;
-
     fn get_admin(&self) -> Option<Address>;
 
     fn set_admin(&self, admin: &Address);
@@ -54,7 +52,7 @@ pub trait EnvExtensions {
 
     fn get_asset_index(&self, asset: &Asset) -> Option<u8>;
 
-    fn panic_if_not_admin(&self, invoker: &Address);
+    fn panic_if_not_admin(&self);
 
     fn is_initialized(&self) -> bool;
 
@@ -62,14 +60,6 @@ pub trait EnvExtensions {
 }
 
 impl EnvExtensions for Env {
-    fn is_authorized(&self, invoker: &Address) -> bool {
-        invoker.require_auth();
-
-        //invoke get_admin to check if the admin is set
-        let admin = self.get_admin();
-        !admin.is_none() && invoker == &admin.unwrap()
-    }
-
     fn is_initialized(&self) -> bool {
         get_instance_storage(&self).has(&ADMIN_KEY)
     }
@@ -181,10 +171,12 @@ impl EnvExtensions for Env {
         return Some(index.unwrap() as u8);
     }
 
-    fn panic_if_not_admin(&self, invoker: &Address) {
-        if !self.is_authorized(invoker) {
+    fn panic_if_not_admin(&self) {
+        let admin = self.get_admin();
+        if admin.is_none() {
             panic_with_error!(self, Error::Unauthorized);
         }
+        admin.unwrap().require_auth()
     }
 
     fn bump(&self, ledgers_to_live: u32) {
