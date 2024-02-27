@@ -19,5 +19,5 @@ pub enum Error {
     // The assets update length or prices update length is invalid
     InvalidUpdateLength = 6,
     // The assets storage is full
-    AssetLimitExceeded = 7
+    AssetLimitExceeded = 7,
 }

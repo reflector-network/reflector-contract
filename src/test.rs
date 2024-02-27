@@ -5,14 +5,12 @@ extern crate std;
 use super::*;
 use alloc::string::ToString;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo, MockAuth, MockAuthInvoke}, Address, Env, String, Symbol, TryIntoVal
+    testutils::{Address as _, Ledger, LedgerInfo, MockAuth, MockAuthInvoke},
+    Address, Env, String, Symbol, TryIntoVal,
 };
 use std::panic::{self, AssertUnwindSafe};
 
-use {
-    extensions::i128_extensions::I128Extensions,
-    types::asset::Asset,
-};
+use {extensions::i128_extensions::I128Extensions, types::asset::Asset};
 
 const RESOLUTION: u32 = 300_000;
 const DECIMALS: u32 = 14;
@@ -369,7 +367,7 @@ fn get_price_test() {
 #[test]
 fn get_lastprice_delayed_update_test() {
     let (env, client, init_data) = init_contract_with_admin();
-    
+
     let assets = init_data.assets;
 
     let timestamp = 300_000;
@@ -387,7 +385,7 @@ fn get_lastprice_delayed_update_test() {
 #[test]
 fn get_x_last_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
-    
+
     let assets = init_data.assets;
 
     let timestamp = 600_000;
@@ -412,7 +410,7 @@ fn get_x_last_price_test() {
 #[test]
 fn get_x_price_with_zero_test() {
     let (env, client, init_data) = init_contract_with_admin();
-    
+
     let assets = init_data.assets;
 
     let timestamp = 600_000;
@@ -432,7 +430,7 @@ fn get_x_price_with_zero_test() {
 #[test]
 fn get_x_price_test() {
     let (env, client, init_data) = init_contract_with_admin();
-    
+
     let assets = init_data.assets;
 
     let timestamp = 600_000;
@@ -475,7 +473,7 @@ fn get_x_price_test() {
 #[test]
 fn twap_test() {
     let (env, client, init_data) = init_contract_with_admin();
-    
+
     let assets = init_data.assets;
 
     let timestamp = 600_000;
@@ -501,7 +499,7 @@ fn twap_test() {
 #[test]
 fn x_twap_test() {
     let (env, client, init_data) = init_contract_with_admin();
-    
+
     let assets = init_data.assets;
 
     //set prices for assets
@@ -605,15 +603,17 @@ fn authorized_test() {
 
     let period: u64 = 100;
     //set prices for assets
-    client.mock_auths(&[MockAuth {
-        address: &config_data.admin,
-        invoke: &MockAuthInvoke {
-            contract: &client.address,
-            fn_name: "set_period",
-            args: Vec::from_array(&env, [period.clone().try_into_val(&env).unwrap()]),
-            sub_invokes: &[],
-        },
-    }]).set_period(&period);
+    client
+        .mock_auths(&[MockAuth {
+            address: &config_data.admin,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "set_period",
+                args: Vec::from_array(&env, [period.clone().try_into_val(&env).unwrap()]),
+                sub_invokes: &[],
+            },
+        }])
+        .set_period(&period);
 }
 
 #[test]
@@ -625,15 +625,17 @@ fn unauthorized_test() {
 
     let period: u64 = 100;
     //set prices for assets
-    client.mock_auths(&[MockAuth {
-        address: &account,
-        invoke: &MockAuthInvoke {
-            contract: &client.address,
-            fn_name: "set_period",
-            args: Vec::from_array(&env, [period.clone().try_into_val(&env).unwrap()]),
-            sub_invokes: &[],
-        },
-    }]).set_period(&period);
+    client
+        .mock_auths(&[MockAuth {
+            address: &account,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "set_period",
+                args: Vec::from_array(&env, [period.clone().try_into_val(&env).unwrap()]),
+                sub_invokes: &[],
+            },
+        }])
+        .set_period(&period);
 }
 
 #[test]
