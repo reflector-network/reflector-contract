@@ -17,10 +17,10 @@ codegen-units = 1
 lto = true
 
 [dependencies]
-soroban-sdk = "20.0.0"
+soroban-sdk = "20.3.2"
 
 [dev_dependencies]
-soroban-sdk = { version = "20.0.0", features = ["testutils"] }
+soroban-sdk = { version = "20.3.2", features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

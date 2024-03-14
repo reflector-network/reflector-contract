@@ -286,7 +286,7 @@ impl PriceOracleContract {
         config.admin.require_auth();
         if e.is_initialized() {
             e.panic_with_error(Error::AlreadyInitialized);
-        } 
+        }
         e.set_admin(&config.admin);
         e.set_base_asset(&config.base_asset);
         e.set_decimals(config.decimals);
@@ -360,7 +360,10 @@ impl PriceOracleContract {
         }
         let timeframe: u64 = e.get_resolution().into();
         let ledger_timestamp = now(&e);
-        if timestamp == 0 || !timestamp.is_valid_timestamp(timeframe) || timestamp > ledger_timestamp {
+        if timestamp == 0
+            || !timestamp.is_valid_timestamp(timeframe)
+            || timestamp > ledger_timestamp
+        {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
 
@@ -466,7 +469,8 @@ fn obtain_record_timestamp(e: &Env) -> u64 {
     let resolution = e.get_resolution() as u64;
     if last_timestamp == 0 //no prices yet
         || last_timestamp > ledger_timestamp //last timestamp is in the future
-        || ledger_timestamp - last_timestamp >= resolution * 2 //last timestamp is too far in the past, so we cannot return the last price
+        || ledger_timestamp - last_timestamp >= resolution * 2
+    //last timestamp is too far in the past, so we cannot return the last price
     {
         return 0;
     }
@@ -489,7 +493,7 @@ fn get_twap<F: Fn(u64) -> Option<PriceData>>(
     let current_time = now(&e);
 
     //check if the last price is too old
-    if last_price_timestamp + timeframe + 60 * 1000 < current_time { 
+    if last_price_timestamp + timeframe + 60 * 1000 < current_time {
         return None;
     }
 

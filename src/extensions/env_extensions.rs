@@ -120,14 +120,17 @@ impl EnvExtensions for Env {
         //set the price
         let temps_storage = get_temporary_storage(&self);
         temps_storage.set(&data_key, &price);
-        if ledgers_to_live > 16 { //16 is the minimum number 
+        if ledgers_to_live > 16 {
+            //16 is the minimum number
             temps_storage.extend_ttl(&data_key, ledgers_to_live, ledgers_to_live)
         }
     }
 
     fn get_last_timestamp(&self) -> u64 {
         //get the marker
-        get_instance_storage(&self).get(&LAST_TIMESTAMP).unwrap_or_default()
+        get_instance_storage(&self)
+            .get(&LAST_TIMESTAMP)
+            .unwrap_or_default()
     }
 
     fn set_last_timestamp(&self, timestamp: u64) {
@@ -182,7 +185,6 @@ impl EnvExtensions for Env {
     fn bump(&self, ledgers_to_live: u32) {
         get_instance_storage(&self).extend_ttl(ledgers_to_live, ledgers_to_live);
     }
-
 }
 
 fn get_instance_storage(e: &Env) -> Instance {

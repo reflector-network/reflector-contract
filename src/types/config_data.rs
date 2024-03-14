@@ -18,5 +18,5 @@ pub struct ConfigData {
     // The number of decimals for the prices.
     pub decimals: u32,
     // The resolution of the prices.
-    pub resolution: u32
+    pub resolution: u32,
 }

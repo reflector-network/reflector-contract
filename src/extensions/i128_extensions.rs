@@ -1,5 +1,4 @@
 pub trait I128Extensions {
-
     // Divides two i128 numbers, considering decimal places.
     //
     // Arguments:
@@ -46,7 +45,7 @@ impl I128Extensions for i128 {
         // Shift the u64 value 64 bits to the left and OR it with the u8 value
         (val_u64 as u128) << 64 | val_u8 as u128
     }
-    
+
     fn decode_from_u128(val: u128) -> (u64, u8) {
         let val_u64 = (val >> 64) as u64;
         let val_u8 = (val & 0xFF) as u8;
@@ -60,7 +59,7 @@ fn div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
     }
     let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
     let bshift = core::cmp::max(decimals - ashift, 0);
-    
+
     let mut vdividend = dividend;
     let mut vdivisor = divisor;
     if ashift > 0 {
