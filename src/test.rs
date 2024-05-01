@@ -89,8 +89,13 @@ fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
 fn version_test() {
     let (_env, client, _init_data) = init_contract_with_admin();
     let result = client.version();
-
-    assert_eq!(result, 3);
+    let version = env!("CARGO_PKG_VERSION")
+        .split(".")
+        .next()
+        .unwrap()
+        .parse::<u32>()
+        .unwrap();
+    assert_eq!(result, version);
 }
 
 #[test]
@@ -426,7 +431,11 @@ fn get_x_price_with_zero_test() {
     //set prices for assets
     client.set_price(&updates, &timestamp);
 
-    let result = client.x_price(&assets.get(0).unwrap(), &assets.get(1).unwrap(), &convert_to_seconds(timestamp));
+    let result = client.x_price(
+        &assets.get(0).unwrap(),
+        &assets.get(1).unwrap(),
+        &convert_to_seconds(timestamp),
+    );
 
     assert_eq!(result, None);
 }
@@ -463,7 +472,11 @@ fn get_x_price_test() {
     );
 
     //check price at 899_000
-    result = client.x_price(&assets.get_unchecked(1), &assets.get_unchecked(2), &convert_to_seconds(899_000));
+    result = client.x_price(
+        &assets.get_unchecked(1),
+        &assets.get_unchecked(2),
+        &convert_to_seconds(899_000),
+    );
     assert_ne!(result, None);
     assert_eq!(
         result,
@@ -593,7 +606,10 @@ fn get_non_registered_asset_price_test() {
 fn get_asset_price_for_invalid_timestamp_test() {
     let (env, client, config_data) = init_contract_with_admin();
 
-    let mut result = client.price(&config_data.assets.get_unchecked(1), &convert_to_seconds(u64::MAX));
+    let mut result = client.price(
+        &config_data.assets.get_unchecked(1),
+        &convert_to_seconds(u64::MAX),
+    );
     assert_eq!(result, None);
 
     //try to get price for unknown asset
