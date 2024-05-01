@@ -87,8 +87,8 @@ impl PriceOracleContract {
     // Price record for the given asset at the given timestamp or None if the record was not found
     pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         let resolution = e.get_resolution();
-        let normalized_timestamp =
-            get_timestamp_in_ms(timestamp).get_normalized_timestamp(resolution.into());
+        let normalized_timestamp = //convert to milliseconds and normalize
+            (timestamp * 1000).get_normalized_timestamp(resolution.into());
         //get the price
         get_price_data(&e, asset, normalized_timestamp)
     }
@@ -170,8 +170,8 @@ impl PriceOracleContract {
         quote_asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
-        let normalized_timestamp =
-            get_timestamp_in_ms(timestamp).get_normalized_timestamp(e.get_resolution().into());
+        let normalized_timestamp = //convert to milliseconds and normalize
+            (timestamp * 1000).get_normalized_timestamp(e.get_resolution().into());
         let decimals = e.get_decimals();
         get_x_price(&e, base_asset, quote_asset, normalized_timestamp, decimals)
     }
@@ -464,10 +464,6 @@ fn prices<F: Fn(u64) -> Option<PriceData>>(
     } else {
         Some(prices)
     }
-}
-
-fn get_timestamp_in_ms(timestamp: u64) -> u64 {
-    timestamp * 1000 //convert to milliseconds
 }
 
 fn now(e: &Env) -> u64 {
