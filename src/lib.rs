@@ -49,7 +49,12 @@ impl PriceOracleContract {
     //
     // History retention period (in seconds)
     pub fn period(e: Env) -> Option<u64> {
-        e.get_retention_period()
+        let period = e.get_retention_period();
+        if period == 0 {
+            return None;
+        } else {
+            return Some(period / 1000); //convert to seconds
+        }
     }
 
     // Returns all assets quoted by the contract.
@@ -61,13 +66,13 @@ impl PriceOracleContract {
         e.get_assets()
     }
 
-    // Returns the most recent price update timestamp.
+    // Returns the most recent price update timestamp in seconds.
     //
     // # Returns
     //
     // Timestamp of the last recorded price update
     pub fn last_timestamp(e: Env) -> u64 {
-        e.get_last_timestamp()
+        e.get_last_timestamp() / 1000 //convert to seconds
     }
 
     // Returns price in base asset at specific timestamp.
@@ -75,14 +80,14 @@ impl PriceOracleContract {
     // # Arguments
     //
     // * `asset` - Asset to quote
-    // * `timestamp` - Timestamp
+    // * `timestamp` - Timestamp in seconds
     //
     // # Returns
     //
     // Price record for the given asset at the given timestamp or None if the record was not found
     pub fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
         let resolution = e.get_resolution();
-        let normalized_timestamp = timestamp.get_normalized_timestamp(resolution.into());
+        let normalized_timestamp = get_timestamp_in_ms(timestamp).get_normalized_timestamp(resolution.into());
         //get the price
         get_price_data(&e, asset, normalized_timestamp)
     }
@@ -164,7 +169,7 @@ impl PriceOracleContract {
         quote_asset: Asset,
         timestamp: u64,
     ) -> Option<PriceData> {
-        let normalized_timestamp = timestamp.get_normalized_timestamp(e.get_resolution().into());
+        let normalized_timestamp = get_timestamp_in_ms(timestamp).get_normalized_timestamp(e.get_resolution().into());
         let decimals = e.get_decimals();
         get_x_price(&e, base_asset, quote_asset, normalized_timestamp, decimals)
     }
@@ -367,7 +372,7 @@ impl PriceOracleContract {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
 
-        let retention_period = e.get_retention_period().unwrap();
+        let retention_period = e.get_retention_period();
 
         let ledgers_to_live: u32 = ((retention_period / 1000 / 5) + 1) as u32;
 
@@ -459,6 +464,10 @@ fn prices<F: Fn(u64) -> Option<PriceData>>(
     }
 }
 
+fn get_timestamp_in_ms(timestamp: u64) -> u64 {
+    timestamp * 1000 //convert to milliseconds
+}
+
 fn now(e: &Env) -> u64 {
     e.ledger().timestamp() * 1000 //convert to milliseconds
 }
@@ -488,7 +497,7 @@ fn get_twap<F: Fn(u64) -> Option<PriceData>>(
         return None;
     }
 
-    let last_price_timestamp = prices.first()?.timestamp;
+    let last_price_timestamp = prices.first()?.timestamp * 1000; //convert to milliseconds to match the timestamp format
     let timeframe = e.get_resolution() as u64;
     let current_time = now(&e);
 
@@ -524,10 +533,10 @@ fn get_x_price_by_indexes(
     let (base_asset, quote_asset) = asset_pair_indexes;
     //check if the asset are the same
     if base_asset == quote_asset {
-        return Some(PriceData {
-            price: 10i128.pow(decimals),
+        return Some(get_normalized_price_data(
+            10i128.pow(decimals),
             timestamp,
-        });
+        ));
     }
 
     //get the price for base_asset
@@ -543,12 +552,12 @@ fn get_x_price_by_indexes(
     }
 
     //calculate the cross price
-    Some(PriceData {
-        price: base_asset_price
+    Some(get_normalized_price_data(
+        base_asset_price
             .unwrap()
             .fixed_div_floor(quote_asset_price.unwrap(), decimals),
         timestamp,
-    })
+    ))
 }
 
 fn get_asset_pair_indexes(e: &Env, base_asset: Asset, quote_asset: Asset) -> Option<(u8, u8)> {
@@ -578,8 +587,12 @@ fn get_price_data_by_index(e: &Env, asset: u8, timestamp: u64) -> Option<PriceDa
     if price.is_none() {
         return None;
     }
-    Some(PriceData {
-        price: price.unwrap(),
-        timestamp,
-    })
+    Some(get_normalized_price_data(price.unwrap(), timestamp))
+}
+
+fn get_normalized_price_data(price: i128, timestamp: u64) -> PriceData {
+    PriceData {
+        price,
+        timestamp: timestamp / 1000, //convert to seconds
+    }
 }

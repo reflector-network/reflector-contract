@@ -15,6 +15,10 @@ use {extensions::i128_extensions::I128Extensions, types::asset::Asset};
 const RESOLUTION: u32 = 300_000;
 const DECIMALS: u32 = 14;
 
+fn convert_to_seconds(timestamp: u64) -> u64 {
+    timestamp / 1000
+}
+
 fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
     let env = Env::default();
 
@@ -103,7 +107,7 @@ fn init_test() {
     assert_eq!(resolution, RESOLUTION / 1000);
 
     let period = client.period().unwrap();
-    assert_eq!(period, init_data.period);
+    assert_eq!(period, init_data.period / 1000);
 
     let decimals = client.decimals();
     assert_eq!(decimals, DECIMALS);
@@ -209,7 +213,7 @@ fn last_price_test() {
         result,
         Some(PriceData {
             price: normalize_price(200),
-            timestamp: 900_000 as u64
+            timestamp: convert_to_seconds(900_000)
         })
     );
 }
@@ -234,7 +238,7 @@ fn last_timestamp_test() {
 
     result = client.last_timestamp();
 
-    assert_eq!(result, 600_000);
+    assert_eq!(result, convert_to_seconds(600_000));
 }
 
 #[test]
@@ -320,7 +324,7 @@ fn set_period_test() {
 
     let result = client.period().unwrap();
 
-    assert_eq!(result, period);
+    assert_eq!(result, convert_to_seconds(period));
 }
 
 #[test]
@@ -348,18 +352,18 @@ fn get_price_test() {
         result,
         Some(PriceData {
             price: normalize_price(200),
-            timestamp: 900_000 as u64
+            timestamp: convert_to_seconds(900_000)
         })
     );
 
     //check price at 899_000
-    result = client.price(&assets.get_unchecked(1), &899_000);
+    result = client.price(&assets.get_unchecked(1), &convert_to_seconds(899_000));
     assert_ne!(result, None);
     assert_eq!(
         result,
         Some(PriceData {
             price: normalize_price(100),
-            timestamp: 600_000 as u64
+            timestamp: convert_to_seconds(600_000)
         })
     );
 }
@@ -402,7 +406,7 @@ fn get_x_last_price_test() {
         result,
         Some(PriceData {
             price: normalize_price(1),
-            timestamp: 600_000 as u64
+            timestamp: convert_to_seconds(600_000)
         })
     );
 }
@@ -422,7 +426,7 @@ fn get_x_price_with_zero_test() {
     //set prices for assets
     client.set_price(&updates, &timestamp);
 
-    let result = client.x_price(&assets.get(0).unwrap(), &assets.get(1).unwrap(), &timestamp);
+    let result = client.x_price(&assets.get(0).unwrap(), &assets.get(1).unwrap(), &convert_to_seconds(timestamp));
 
     assert_eq!(result, None);
 }
@@ -454,18 +458,18 @@ fn get_x_price_test() {
         result,
         Some(PriceData {
             price: normalize_price(1),
-            timestamp: 900_000 as u64
+            timestamp: convert_to_seconds(900_000)
         })
     );
 
     //check price at 899_000
-    result = client.x_price(&assets.get_unchecked(1), &assets.get_unchecked(2), &899_000);
+    result = client.x_price(&assets.get_unchecked(1), &assets.get_unchecked(2), &convert_to_seconds(899_000));
     assert_ne!(result, None);
     assert_eq!(
         result,
         Some(PriceData {
             price: normalize_price(1),
-            timestamp: 600_000 as u64
+            timestamp: convert_to_seconds(600_000)
         })
     );
 }
@@ -589,7 +593,7 @@ fn get_non_registered_asset_price_test() {
 fn get_asset_price_for_invalid_timestamp_test() {
     let (env, client, config_data) = init_contract_with_admin();
 
-    let mut result = client.price(&config_data.assets.get_unchecked(1), &u64::MAX);
+    let mut result = client.price(&config_data.assets.get_unchecked(1), &convert_to_seconds(u64::MAX));
     assert_eq!(result, None);
 
     //try to get price for unknown asset

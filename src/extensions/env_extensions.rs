@@ -32,7 +32,7 @@ pub trait EnvExtensions {
 
     fn set_resolution(&self, resolution: u32);
 
-    fn get_retention_period(&self) -> Option<u64>;
+    fn get_retention_period(&self) -> u64;
 
     fn set_retention_period(&self, period: u64);
 
@@ -96,7 +96,7 @@ impl EnvExtensions for Env {
         get_instance_storage(&self).set(&RESOLUTION, &resolution)
     }
 
-    fn get_retention_period(&self) -> Option<u64> {
+    fn get_retention_period(&self) -> u64 {
         get_instance_storage(&self)
             .get(&RETENTION_PERIOD)
             .unwrap_or_default()
