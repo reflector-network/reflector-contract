@@ -303,19 +303,6 @@ impl PriceOracleContract {
         Self::__add_assets(&e, config.assets);
     }
 
-    // Bumps the contract instance storage expiration to the given number of ledgers.
-    //
-    // # Arguments
-    //
-    // * `ledgers_to_live` - Extension period specified in ledgers count
-    //
-    // # Panics
-    //
-    // Panics if ledgers_to_live is invalid
-    pub fn bump(e: Env, ledgers_to_live: u32) {
-        e.bump(ledgers_to_live);
-    }
-
     // Adds given assets to the contract quoted assets list. Can be invoked only by the admin account.
     //
     // # Arguments

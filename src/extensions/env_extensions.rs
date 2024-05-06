@@ -55,8 +55,6 @@ pub trait EnvExtensions {
     fn panic_if_not_admin(&self);
 
     fn is_initialized(&self) -> bool;
-
-    fn bump(&self, ledgers_to_live: u32);
 }
 
 impl EnvExtensions for Env {
@@ -180,10 +178,6 @@ impl EnvExtensions for Env {
             panic_with_error!(self, Error::Unauthorized);
         }
         admin.unwrap().require_auth()
-    }
-
-    fn bump(&self, ledgers_to_live: u32) {
-        get_instance_storage(&self).extend_ttl(ledgers_to_live, ledgers_to_live);
     }
 }
 
