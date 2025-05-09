@@ -14,6 +14,8 @@ const ASSETS: &str = "assets";
 const BASE_ASSET: &str = "base_asset";
 const DECIMALS: &str = "decimals";
 const RESOLUTION: &str = "resolution";
+const ASSET_TTLS: &str = "asset_ttls";
+const FEE: &str = "fee";
 
 pub trait EnvExtensions {
     fn get_admin(&self) -> Option<Address>;
@@ -51,6 +53,14 @@ pub trait EnvExtensions {
     fn set_asset_index(&self, asset: &Asset, index: u32);
 
     fn get_asset_index(&self, asset: &Asset) -> Option<u8>;
+
+    fn set_asset_ttls(&self, assets: &Vec<u64>);
+
+    fn get_asset_ttls(&self) -> Vec<u64>;
+
+    fn set_fee_data(&self, fee_data: (Address, i128));
+
+    fn get_fee_data(&self) -> Option<(Address, i128)>;
 
     fn panic_if_not_admin(&self);
 
@@ -170,6 +180,24 @@ impl EnvExtensions for Env {
             return None;
         }
         return Some(index.unwrap() as u8);
+    }
+
+    fn set_asset_ttls(&self, assets: &Vec<u64>) {
+        get_instance_storage(self).set(&ASSET_TTLS, assets)
+    }
+
+    fn get_asset_ttls(&self) -> Vec<u64> {
+        get_instance_storage(self)
+            .get(&ASSET_TTLS)
+            .unwrap_or_else(|| Vec::new(self))
+    }
+
+    fn set_fee_data(&self, fee_data: (Address, i128)) {
+        get_instance_storage(self).set(&FEE, &fee_data);
+    }
+
+    fn get_fee_data(&self) -> Option<(Address, i128)> {
+        get_instance_storage(self).get(&FEE)
     }
 
     fn panic_if_not_admin(&self) {

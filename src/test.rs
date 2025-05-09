@@ -5,8 +5,7 @@ extern crate std;
 use super::*;
 use alloc::string::ToString;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo, MockAuth, MockAuthInvoke},
-    Address, Env, String, Symbol, TryIntoVal,
+    testutils::{Address as _, Ledger, LedgerInfo, MockAuth, MockAuthInvoke}, token::StellarAssetClient, Address, Env, String, Symbol, TryIntoVal
 };
 use std::panic::{self, AssertUnwindSafe};
 
@@ -36,10 +35,10 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         "CDXHQTB7FGRMWTLJJLNI3XPKVC6SZDB5SFGZUYDPEGQQNC4G6CKE4QRC",
     ));
 
-    env.register_contract(contract_id, PriceOracleContract);
+    env.register_at(contract_id, PriceOracleContract, ());
     let client: PriceOracleContractClient<'a> = PriceOracleContractClient::new(&env, contract_id);
 
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let init_data = ConfigData {
         admin: admin.clone(),
@@ -47,7 +46,7 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         assets: generate_assets(&env, 10, 0),
         base_asset: Asset::Stellar(Address::generate(&env)),
         decimals: 14,
-        resolution: RESOLUTION,
+        resolution: RESOLUTION
     };
 
     env.mock_all_auths();
@@ -281,7 +280,7 @@ fn assets_update_overflow_test() {
 
     env.mock_all_auths();
 
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let mut assets = Vec::new(&env);
     for i in 1..=256 {
@@ -301,7 +300,7 @@ fn prices_update_overflow_test() {
 
     env.mock_all_auths();
 
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
 
     let mut updates = Vec::new(&env);
     for i in 1..=256 {
@@ -678,4 +677,42 @@ fn div_tests() {
             assert_eq!(result.unwrap(), *expected);
         }
     }
+}
+
+#[test]
+fn set_fee_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    //emulate old contract state
+    env.as_contract(&client.address, || {
+        env.storage().instance().remove(&"fee");
+        env.storage().instance().remove(&"asset_ttls");
+    });
+
+    let fee_data = client.fee();
+    assert!(fee_data.is_none());
+
+    //create fee asset token
+    let fee_asset = env.register_stellar_asset_contract_v2(init_data.admin.clone());
+
+    let fee_data = (fee_asset.address(), 10);
+
+    client.set_fee(&fee_data);
+
+    let result = client.fee();
+    assert!(result.is_some());
+    assert_eq!(result.unwrap(), fee_data);
+
+    let asset: Asset = init_data.assets.get_unchecked(0);
+
+    let asset_ttls = client.asset_ttl(&asset);
+    assert!(asset_ttls.is_some());
+
+    let sponsor = Address::generate(&env);
+    let fee_token = StellarAssetClient::new(&env, &fee_data.0);
+    fee_token.mint(&sponsor, &100);
+
+    let asset_ttl = client.asset_ttl(&asset).unwrap();
+    client.extend_asset_ttl(&sponsor, &asset, &10);
+    assert_eq!(client.asset_ttl(&asset).unwrap(), asset_ttl + days_to_milliseconds(10));
 }
