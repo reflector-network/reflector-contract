@@ -14,8 +14,8 @@ const ASSETS: &str = "assets";
 const BASE_ASSET: &str = "base_asset";
 const DECIMALS: &str = "decimals";
 const RESOLUTION: &str = "resolution";
-const ASSET_TTLS: &str = "asset_ttls";
-const FEE: &str = "fee";
+const EXPIRATION: &str = "expiration";
+const RETENTION: &str = "retention";
 
 pub trait EnvExtensions {
     fn get_admin(&self) -> Option<Address>;
@@ -54,13 +54,13 @@ pub trait EnvExtensions {
 
     fn get_asset_index(&self, asset: &Asset) -> Option<u8>;
 
-    fn set_asset_ttls(&self, assets: &Vec<u64>);
+    fn set_expiration(&self, assets: &Vec<u64>);
 
-    fn get_asset_ttls(&self) -> Vec<u64>;
+    fn get_expiration(&self) -> Vec<u64>;
 
-    fn set_fee_data(&self, fee_data: (Address, i128));
+    fn set_retention_config(&self, fee_data: (Address, i128));
 
-    fn get_fee_data(&self) -> Option<(Address, i128)>;
+    fn get_retention_config(&self) -> Option<(Address, i128)>;
 
     fn panic_if_not_admin(&self);
 
@@ -179,25 +179,25 @@ impl EnvExtensions for Env {
         if index.is_none() {
             return None;
         }
-        return Some(index.unwrap() as u8);
+        Some(index.unwrap() as u8) //case to u8
     }
 
-    fn set_asset_ttls(&self, assets: &Vec<u64>) {
-        get_instance_storage(self).set(&ASSET_TTLS, assets)
+    fn set_expiration(&self, expiration: &Vec<u64>) {
+        get_instance_storage(self).set(&EXPIRATION, expiration)
     }
 
-    fn get_asset_ttls(&self) -> Vec<u64> {
+    fn get_expiration(&self) -> Vec<u64> {
         get_instance_storage(self)
-            .get(&ASSET_TTLS)
+            .get(&EXPIRATION)
             .unwrap_or_else(|| Vec::new(self))
     }
 
-    fn set_fee_data(&self, fee_data: (Address, i128)) {
-        get_instance_storage(self).set(&FEE, &fee_data);
+    fn set_retention_config(&self, retention_config: (Address, i128)) {
+        get_instance_storage(self).set(&RETENTION, &retention_config);
     }
 
-    fn get_fee_data(&self) -> Option<(Address, i128)> {
-        get_instance_storage(self).get(&FEE)
+    fn get_retention_config(&self) -> Option<(Address, i128)> {
+        get_instance_storage(self).get(&RETENTION)
     }
 
     fn panic_if_not_admin(&self) {

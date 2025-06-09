@@ -680,39 +680,42 @@ fn div_tests() {
 }
 
 #[test]
-fn set_fee_test() {
+fn set_retention_config_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
     //emulate old contract state
     env.as_contract(&client.address, || {
-        env.storage().instance().remove(&"fee");
-        env.storage().instance().remove(&"asset_ttls");
+        env.storage().instance().remove(&"retention");
+        env.storage().instance().remove(&"expiration");
     });
 
-    let fee_data = client.fee();
+    let fee_data = client.retention_config();
     assert!(fee_data.is_none());
 
     //create fee asset token
     let fee_asset = env.register_stellar_asset_contract_v2(init_data.admin.clone());
 
-    let fee_data = (fee_asset.address(), 10);
+    let retention_config = (fee_asset.address(), 7);
 
-    client.set_fee(&fee_data);
+    client.set_retention_config(&retention_config);
 
-    let result = client.fee();
+    let result = client.retention_config();
     assert!(result.is_some());
-    assert_eq!(result.unwrap(), fee_data);
+    assert_eq!(result.unwrap(), retention_config);
 
     let asset: Asset = init_data.assets.get_unchecked(0);
 
-    let asset_ttls = client.asset_ttl(&asset);
-    assert!(asset_ttls.is_some());
+    let expires = client.expires(&asset);
+    assert!(expires.is_some());
 
     let sponsor = Address::generate(&env);
-    let fee_token = StellarAssetClient::new(&env, &fee_data.0);
+    let fee_token = StellarAssetClient::new(&env, &retention_config.0);
     fee_token.mint(&sponsor, &100);
 
-    let asset_ttl = client.asset_ttl(&asset).unwrap();
-    client.extend_asset_ttl(&sponsor, &asset, &10);
-    assert_eq!(client.asset_ttl(&asset).unwrap(), asset_ttl + days_to_milliseconds(10));
+    let bump_price = client.estimate_extend(&10);
+    assert_eq!(bump_price, 70);
+    
+    let symbol_expires = client.expires(&asset).unwrap();
+    client.extend(&sponsor, &asset, &10);
+    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + days_to_milliseconds(10));
 }

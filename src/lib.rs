@@ -4,23 +4,21 @@ mod extensions;
 mod test;
 mod types;
 
-use extensions::i128_extensions::I128Extensions;
-use extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
-use soroban_sdk::token::TokenClient;
-use soroban_sdk::{
-    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec,
+use extensions::{
+    env_extensions::EnvExtensions, i128_extensions::I128Extensions, u64_extensions::U64Extensions,
 };
-use types::asset::Asset;
-use types::error::Error;
+use soroban_sdk::token::TokenClient;
+use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec};
+use types::{asset::Asset, error::Error};
 use types::{config_data::ConfigData, price_data::PriceData};
 
 const REFLECTOR: Symbol = symbol_short!("reflector");
-const DEFAULT_ASSET_TTL_DAYS: u32 = 365; //year in seconds
+const DEFAULT_EXPIRATION_PERIOD: u32 = 365; //days in year
 
-#[contract]
+#[soroban_sdk::contract]
 pub struct PriceOracleContract;
 
-#[contractimpl]
+#[soroban_sdk::contractimpl]
 impl PriceOracleContract {
     // Returns the base asset the price is reported in.
     //
@@ -274,83 +272,109 @@ impl PriceOracleContract {
             .unwrap()
     }
 
-    // Returns the ttl for the given asset.
+    // Returns the expiration date for a given asset.
     //
     // # Arguments
     //
-    // * `asset` - Asset to quote
+    // * `asset` - Quoted asset
     //
     // # Returns
     //
     // Asset expiration timestamp or None if the asset is not supported
-    pub fn asset_ttl(e: &Env, asset: Asset) -> Option<u64> {
+    pub fn expires(e: &Env, asset: Asset) -> Option<u64> {
         let asset_index = e.get_asset_index(&asset);
         if asset_index.is_none() {
             e.panic_with_error(Error::AssetMissing);
         }
-        let expirations = e.get_asset_ttls();
+        let expirations = e.get_expiration();
         let asset_index = asset_index.unwrap() as u32;
-        return expirations.get(asset_index);
+        expirations.get(asset_index)
     }
 
-    // Extends the asset expiration date by given number of days.
+    // Extends the asset expiration date by a given number of days.
     //
     // # Arguments
     //
-    // * `sponsor` - Sponsor account address
-    // * `asset` - Asset to quote
-    // * `days` - Number of days to extend the expiration date
+    // * `sponsor` - Sponsor account address that burns tokens
+    // * `asset` - Quoted asset
+    // * `days` - Number of days to add
     //
     // # Panics
     //
     // Panics if the asset is not supported, or if the fee token or fee itself are not set
-    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, days: u32) {
-        sponsor.require_auth(); //check if the sponsor is the caller
+    pub fn extend(e: &Env, sponsor: Address, asset: Asset, days: u32) {
+        //check sponsor authorization
+        sponsor.require_auth();
         //ensure that the asset is supported
         let asset_index = e.get_asset_index(&asset);
         if asset_index.is_none() {
             e.panic_with_error(Error::AssetMissing);
         }
         let asset_index = asset_index.unwrap() as u32;
-
         //ensure that the fee token and fee are set
-        let fee_data = e.get_fee_data();
+        let fee_data = e.get_retention_config();
         if fee_data.is_none() {
             e.panic_with_error(Error::InvalidConfigVersion);
         }
         let (fee_token, fee) = fee_data.unwrap();
 
-        //get total fee amount
-        let fee_amount = fee.checked_mul(days.into()).unwrap();
-        if fee_amount > 0 {
-            //burn the fee token
-            TokenClient::new(&e, &fee_token).burn(&sponsor, &fee_amount);
+        //calculate amount of tokens to charge
+        let charge = fee.checked_mul(days.into()).unwrap();
+        if charge == 0 {
+            return;
         }
 
-        //load assets ttl
-        let mut asset_ttls = e.get_asset_ttls();
-        let mut asset_ttl = asset_ttls
-            .get(asset_index)
-            .unwrap_or_default();
+        //burn the corresponding amount of fee tokens
+        TokenClient::new(&e, &fee_token).burn(&sponsor, &charge);
+
+        //load expiration info
+        let mut expiration = e.get_expiration();
+        let mut asset_expiration = expiration.get(asset_index).unwrap_or_default();
         let now = now(&e);
-        if asset_ttl == 0 || asset_ttl < now {
-            //if the asset is not set or expired, set it to now
-            asset_ttl = now;
+        //if the asset expiration is not set, or it's already expired - set it to now
+        if asset_expiration == 0 || asset_expiration < now {
+            asset_expiration = now;
         }
-        asset_ttl = asset_ttl
+        //bump expiration
+        asset_expiration = asset_expiration
             .checked_add(days_to_milliseconds(days))
             .unwrap();
-        asset_ttls.set(asset_index, asset_ttl);
-        e.set_asset_ttls(&asset_ttls)
+        //write the vector that holds expiration dates for all symbols
+        expiration.set(asset_index, asset_expiration);
+        //update instance
+        e.set_expiration(&expiration)
     }
 
-    // Returns the fee token address and fee amount.
+    // Estimates the cost of asset retention bump
+    //
+    // # Arguments
+    //
+    // * `days` - Number of days
     //
     // # Returns
     //
-    // Fee token address
-    pub fn fee(e: Env) -> Option<(Address, i128)> {
-        e.get_fee_data()
+    // Amount that will be charged for the expiration bump for a given number of days
+    //
+    // # Panics
+    //
+    // Panics if the retention config hasn't been initialized
+    pub fn estimate_extend(e: &Env, days: u32) -> i128 {
+        let fee_data = e.get_retention_config();
+        if fee_data.is_none() {
+            e.panic_with_error(Error::InvalidConfigVersion);
+        }
+        let (_, fee) = fee_data.unwrap();
+
+        fee.checked_mul(days.into()).unwrap()
+    }
+
+    // Returns the fee token address and daily retainer fee amount.
+    //
+    // # Returns
+    //
+    // Fee token address and daily price feed retainer fee amount
+    pub fn retention_config(e: Env) -> Option<(Address, i128)> {
+        e.get_retention_config()
     }
 
     // Returns admin address of the contract.
@@ -363,32 +387,6 @@ impl PriceOracleContract {
     }
 
     //Admin section
-
-    // Sets the fee token address and fee. Can be invoked only by the admin account.
-    //
-    // # Arguments
-    //
-    // * `fee_data` - Fee token address and fee amount
-    //
-    // # Panics
-    //
-    // Panics if the caller doesn't match admin address, or not initialized yet
-    pub fn set_fee(e: Env, fee_data: (Address, i128)) {
-        e.panic_if_not_admin();
-
-        e.set_fee_data(fee_data);
-        let mut asset_ttls = e.get_asset_ttls();
-        if asset_ttls.len() > 0 {
-            return; //the ttls are already set, so we don't need to set them again
-        }
-        //set the asset ttls to 365 days for all assets
-        let assets = e.get_assets();
-        let ttl = now(&e).checked_add(days_to_milliseconds(DEFAULT_ASSET_TTL_DAYS)).unwrap();
-        for _ in 0..assets.len() {
-            asset_ttls.push_back(ttl);
-        }
-        e.set_asset_ttls(&asset_ttls);
-    }
 
     // Updates the contract configuration parameters. Can be invoked only by the admin account.
     //
@@ -444,6 +442,34 @@ impl PriceOracleContract {
     pub fn set_period(e: Env, period: u64) {
         e.panic_if_not_admin();
         e.set_retention_period(period);
+    }
+
+    // Sets the fee token address and daily retainer fee amount.
+    // Can be invoked only by the admin account.
+    //
+    // # Arguments
+    //
+    // * `fee_config` - Fee token address and fee amount
+    //
+    // # Panics
+    //
+    // Panics if the caller doesn't match admin address, or not initialized yet
+    pub fn set_retention_config(e: Env, retention_config: (Address, i128)) {
+        e.panic_if_not_admin();
+        e.set_retention_config(retention_config);
+        let mut expiration = e.get_expiration();
+        if expiration.len() > 0 {
+            return; // expiration values for existing price feeds already initialized
+        }
+        //init expiration, set 365 days for all symbols by default
+        let exp = now(&e)
+            .checked_add(days_to_milliseconds(DEFAULT_EXPIRATION_PERIOD))
+            .unwrap();
+        let assets = e.get_assets();
+        for _ in 0..assets.len() {
+            expiration.push_back(exp);
+        }
+        e.set_expiration(&expiration);
     }
 
     // Record new price feed history snapshot. Can be invoked only by the admin account.
@@ -686,10 +712,13 @@ fn get_normalized_price_data(price: i128, timestamp: u64) -> PriceData {
 }
 
 fn add_assets(e: &Env, assets: Vec<Asset>) {
-    let ttl = now(&e).checked_add(days_to_milliseconds(DEFAULT_ASSET_TTL_DAYS)).unwrap();
+    //use default expiration period for new assets
+    let expiration_timestamp = now(&e)
+        .checked_add(days_to_milliseconds(DEFAULT_EXPIRATION_PERIOD))
+        .unwrap();
     let mut current_assets = e.get_assets();
-    let mut asset_ttls = e.get_asset_ttls();
-    let is_fee_initialized = e.get_fee_data().is_some();
+    let mut expiration = e.get_expiration();
+    let retention_config_initialized = e.get_retention_config().is_some();
     for asset in assets.iter() {
         //check if the asset has been already added
         if e.get_asset_index(&asset).is_some() {
@@ -698,17 +727,16 @@ fn add_assets(e: &Env, assets: Vec<Asset>) {
         e.set_asset_index(&asset, current_assets.len());
         current_assets.push_back(asset);
 
-        //if the fee is not initialized, we don't need to set the ttl. Otherwise it can lead to inconsistent state
-        if is_fee_initialized { 
-            //set expiration to 365 days for the new asset
-            asset_ttls.push_back(ttl);
+        //if the fee is not initialized, we don't need to set the expiration
+        if retention_config_initialized {
+            expiration.push_back(expiration_timestamp); //set expiration
         }
     }
     if current_assets.len() >= 256 {
         panic_with_error!(&e, Error::AssetLimitExceeded);
     }
     e.set_assets(current_assets);
-    e.set_asset_ttls(&asset_ttls);
+    e.set_expiration(&expiration);
 }
 
 fn days_to_milliseconds(days: u32) -> u64 {

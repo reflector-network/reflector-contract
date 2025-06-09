@@ -1,3 +1,4 @@
+/.idea
 /.soroban
 /target
 /price-oracle/test_snapshots
