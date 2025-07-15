@@ -46,7 +46,8 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         assets: generate_assets(&env, 10, 0),
         base_asset: Asset::Stellar(Address::generate(&env)),
         decimals: 14,
-        resolution: RESOLUTION
+        resolution: RESOLUTION,
+        cache_size: 0
     };
 
     env.mock_all_auths();
@@ -212,6 +213,64 @@ fn last_price_test() {
             price: normalize_price(200),
             timestamp: convert_to_seconds(900_000)
         })
+    );
+}
+
+#[test]
+fn prices_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let assets = init_data.assets;
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&get_updates(&env, &assets, normalize_price(100)), &600_000);
+    client.set_price(&get_updates(&env, &assets, normalize_price(200)), &900_000);
+
+    let result = client.prices(&assets.get_unchecked(1), &2);
+    assert_ne!(result, None);
+    assert_eq!(
+        result,
+        Some(Vec::from_array(&env, [
+            PriceData {
+                price: normalize_price(200),
+                timestamp: convert_to_seconds(900_000)
+            },
+            PriceData {
+                price: normalize_price(100),
+                timestamp: convert_to_seconds(600_000)
+            }
+        ]))
+    );
+}
+
+#[test]
+fn x_prices_test() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let assets = init_data.assets;
+
+    env.mock_all_auths();
+
+    //set prices for assets
+    client.set_price(&get_updates(&env, &assets, normalize_price(100)), &600_000);
+    client.set_price(&get_updates(&env, &assets, normalize_price(200)), &900_000);
+
+    let result = client.x_prices(&assets.get_unchecked(0), &assets.get_unchecked(1), &2);
+    assert_ne!(result, None);
+    assert_eq!(
+        result,
+        Some(Vec::from_array(&env, [
+            PriceData {
+                price: normalize_price(1),
+                timestamp: convert_to_seconds(900_000)
+            },
+            PriceData {
+                price: normalize_price(1),
+                timestamp: convert_to_seconds(600_000)
+            }
+        ]))
     );
 }
 

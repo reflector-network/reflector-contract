@@ -19,4 +19,6 @@ pub struct ConfigData {
     pub decimals: u32,
     // The resolution of the prices.
     pub resolution: u32,
+    // The cache size for the prices.
+    pub cache_size: u32
 }

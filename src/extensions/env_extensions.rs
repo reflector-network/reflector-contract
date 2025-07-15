@@ -2,10 +2,9 @@
 use soroban_sdk::storage::{Instance, Temporary};
 use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
-use crate::extensions;
+use crate::extensions::u128_helper::U128Helper;
 use crate::types;
 
-use extensions::u128_helper::U128Helper;
 use types::{asset::Asset, error::Error};
 const ADMIN_KEY: &str = "admin";
 const LAST_TIMESTAMP: &str = "last_timestamp";
@@ -16,6 +15,10 @@ const DECIMALS: &str = "decimals";
 const RESOLUTION: &str = "resolution";
 const EXPIRATION: &str = "expiration";
 const RETENTION: &str = "retention";
+const CACHE: &str = "cache";
+const CACHE_SIZE: &str = "cache_size";
+
+const V2_UPDATE_TS: &str = "v2_update_ts";
 
 pub trait EnvExtensions {
     fn get_admin(&self) -> Option<Address>;
@@ -42,6 +45,18 @@ pub trait EnvExtensions {
 
     fn set_price(&self, asset: u8, price: i128, timestamp: u64, ledgers: u32);
 
+    fn get_prices(&self, timestamp: u64) -> Option<Vec<i128>>;
+
+    fn set_prices(&self, prices: &Vec<i128>, timestamp: u64, ledgers: u32);
+
+    fn get_cache(&self) -> Option<Vec<(u64, Vec<i128>)>>;
+
+    fn set_cache(&self, prices: Vec<(u64,Vec<i128>)>);
+
+    fn get_cache_size(&self) -> u32;
+
+    fn set_cache_size(&self, cache_size: u32);
+
     fn get_last_timestamp(&self) -> u64;
 
     fn set_last_timestamp(&self, timestamp: u64);
@@ -52,7 +67,7 @@ pub trait EnvExtensions {
 
     fn set_asset_index(&self, asset: &Asset, index: u32);
 
-    fn get_asset_index(&self, asset: &Asset) -> Option<u8>;
+    fn get_asset_index(&self, asset: &Asset) -> Option<u32>;
 
     fn set_expiration(&self, assets: &Vec<u64>);
 
@@ -65,6 +80,10 @@ pub trait EnvExtensions {
     fn panic_if_not_admin(&self);
 
     fn is_initialized(&self) -> bool;
+
+    fn get_v2_update_ts(&self) -> u64;
+
+    fn set_v2_update_ts(&self, timestamp: u64);
 }
 
 impl EnvExtensions for Env {
@@ -134,6 +153,47 @@ impl EnvExtensions for Env {
         }
     }
 
+    fn get_prices(&self, timestamp: u64) -> Option<Vec<i128>> {
+        //check if the timestamp is in the cache
+        let cache = self.get_cache();
+        if cache.is_some() {
+            //check the cache first
+            for (ts, prices) in cache.unwrap() {
+                if ts == timestamp {
+                    return Some(prices);
+                }
+            }
+        }
+        //get the price from the temporary storage
+        get_temporary_storage(self).get(&timestamp)
+    }
+
+    fn set_prices(&self, prices: &Vec<i128>, timestamp: u64, ledgers: u32) {
+        //set the price
+        let temps_storage = get_temporary_storage(&self);
+        temps_storage.set(&timestamp, prices);
+        if ledgers > 16 {
+            //16 is the minimum number
+            temps_storage.extend_ttl(&timestamp, ledgers, ledgers)
+        }
+    }
+
+    fn get_cache(&self) -> Option<Vec<(u64, Vec<i128>)>> {
+        get_instance_storage(self).get(&CACHE)
+    }
+
+    fn set_cache(&self, prices: Vec<(u64,Vec<i128>)>) {
+        get_instance_storage(&self).set(&CACHE, &prices);
+    }
+
+    fn get_cache_size(&self) -> u32 {
+        get_instance_storage(self).get(&CACHE_SIZE).unwrap_or(0)
+    }
+
+    fn set_cache_size(&self, cache_size: u32) {
+        get_instance_storage(&self).set(&CACHE_SIZE, &cache_size);
+    }
+
     fn get_last_timestamp(&self) -> u64 {
         //get the marker
         get_instance_storage(&self)
@@ -166,7 +226,7 @@ impl EnvExtensions for Env {
         }
     }
 
-    fn get_asset_index(&self, asset: &Asset) -> Option<u8> {
+    fn get_asset_index(&self, asset: &Asset) -> Option<u32> {
         let index: Option<u32>;
         match asset {
             Asset::Stellar(address) => {
@@ -179,7 +239,7 @@ impl EnvExtensions for Env {
         if index.is_none() {
             return None;
         }
-        Some(index.unwrap() as u8) //case to u8
+        Some(index.unwrap())
     }
 
     fn set_expiration(&self, expiration: &Vec<u64>) {
@@ -206,6 +266,14 @@ impl EnvExtensions for Env {
             panic_with_error!(self, Error::Unauthorized);
         }
         admin.unwrap().require_auth()
+    }
+
+    fn get_v2_update_ts(&self) -> u64 {
+        get_instance_storage(self).get(&V2_UPDATE_TS).unwrap_or(0)
+    }
+
+    fn set_v2_update_ts(&self, timestamp: u64) {
+        get_instance_storage(self).set(&V2_UPDATE_TS, &timestamp);
     }
 }
 
