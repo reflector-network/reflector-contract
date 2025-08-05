@@ -12,8 +12,11 @@ use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env, Symbol, 
 use types::{asset::Asset, error::Error};
 use types::{config_data::ConfigData, price_data::PriceData};
 
+use crate::types::retention_config::RetentionConfig;
+
 const REFLECTOR: Symbol = symbol_short!("reflector");
-const DEFAULT_EXPIRATION_PERIOD: u32 = 365; //days in year
+const INITIAL_EXPIRATION_PERIOD: u32 = 365; //days in year
+const CURRENT_PROTOCOL: u32 = 2; //current protocol version
 
 #[soroban_sdk::contract]
 pub struct PriceOracleContract;
@@ -52,8 +55,8 @@ impl PriceOracleContract {
     // # Returns
     //
     // History retention period (in seconds)
-    pub fn period(e: &Env) -> Option<u64> {
-        let period = e.get_retention_period();
+    pub fn history_retention_period(e: &Env) -> Option<u64> {
+        let period: u64 = e.get_history_retention_period();
         if period == 0 {
             return None;
         } else {
@@ -136,20 +139,10 @@ impl PriceOracleContract {
     //
     // Prices for the given asset or None if the asset is not supported
     pub fn prices(e: &Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
-        let asset_index = e.get_asset_index(&asset); //get the asset index to avoid multiple calls
-        if asset_index.is_none() {
-            return None;
-        }
-        if !is_legacy_expired(&e, now(&e)) {
-            return prices(
-                &e,
-                |timestamp| get_price_data_by_index_legacy(e, asset_index.unwrap() as u8, timestamp),
-                records,
-            );
-        }
+        let asset_index = e.get_asset_index(&asset)?; //get the asset index to avoid multiple calls
         prices(
             &e,
-            |timestamp| get_price_data_by_index(asset_index.unwrap(), timestamp, &e.get_prices(timestamp)),
+            |timestamp| get_price_data_by_index(e, asset_index, timestamp, &e.get_prices(timestamp)),
             records,
         )
     }
@@ -212,15 +205,12 @@ impl PriceOracleContract {
         quote_asset: Asset,
         records: u32,
     ) -> Option<Vec<PriceData>> {
-        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
-        if asset_pair_indexes.is_none() {
-            return None;
-        }
+        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset)?;
         let decimals = e.get_decimals();
         prices(
             &e,
             |timestamp| {
-                get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp, decimals)
+                get_x_price_by_indexes(&e, asset_pair_indexes, timestamp, decimals)
             },
             records,
         )
@@ -237,22 +227,10 @@ impl PriceOracleContract {
     //
     // TWAP for the given asset over N recent records or None if the asset is not supported
     pub fn twap(e: &Env, asset: Asset, records: u32) -> Option<i128> {
-        let asset_index = e.get_asset_index(&asset); //get the asset index to avoid multiple calls
-        if asset_index.is_none() {
-            return None;
-        }
-
-        if !is_legacy_expired(&e, now(&e)) {
-            return get_twap(
-                &e,
-                |timestamp| get_price_data_by_index_legacy(e, asset_index.unwrap() as u8, timestamp),
-                records,
-            );
-        }
-
+        let asset_index = e.get_asset_index(&asset)?; //get the asset index to avoid multiple calls
         get_twap(
             &e,
-            |timestamp| get_price_data_by_index(asset_index.unwrap(), timestamp, &e.get_prices(timestamp)),
+            |timestamp| get_price_data_by_index(e, asset_index, timestamp, &e.get_prices(timestamp)),
             records,
         )
     }
@@ -269,15 +247,12 @@ impl PriceOracleContract {
     // TWAP (base_asset_price/quote_asset_price) or None if the assets are not supported.
     pub fn x_twap(e: &Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
         //get asset index to avoid multiple calls
-        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset);
-        if asset_pair_indexes.is_none() {
-            return None;
-        }
+        let asset_pair_indexes = get_asset_pair_indexes(&e, base_asset, quote_asset)?;
         let decimals = e.get_decimals();
         get_twap(
             &e,
             |timestamp| {
-                get_x_price_by_indexes(&e, asset_pair_indexes.unwrap(), timestamp, decimals)
+                get_x_price_by_indexes(&e, asset_pair_indexes, timestamp, decimals)
             },
             records,
         )
@@ -312,85 +287,76 @@ impl PriceOracleContract {
             e.panic_with_error(Error::AssetMissing);
         }
         let expirations = e.get_expiration();
-        let asset_index = asset_index.unwrap() as u32;
-        expirations.get(asset_index)
+        expirations.get(asset_index.unwrap() as u32)
     }
 
-    // Extends the asset expiration date by a given number of days.
+    // Extends the asset expiration date by a given amount of tokens.
     //
     // # Arguments
     //
     // * `sponsor` - Sponsor account address that burns tokens
     // * `asset` - Quoted asset
-    // * `days` - Number of days to add
+    // * `amount` - Amount of tokens to burn for extending the expiration date
     //
     // # Panics
     //
     // Panics if the asset is not supported, or if the fee token or fee itself are not set
-    pub fn extend(e: &Env, sponsor: Address, asset: Asset, days: u32) {
+    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
         //check sponsor authorization
         sponsor.require_auth();
+        //check if the amount is valid
+        if amount <= 0 {
+            e.panic_with_error(Error::InvalidAmount);
+        }
         //ensure that the asset is supported
         let asset_index = e.get_asset_index(&asset);
         if asset_index.is_none() {
             e.panic_with_error(Error::AssetMissing);
         }
         let asset_index = asset_index.unwrap() as u32;
-        //ensure that the fee token and fee are set
-        let fee_data = e.get_retention_config();
-        if fee_data.is_none() {
-            e.panic_with_error(Error::InvalidConfigVersion);
-        }
-        let (fee_token, fee) = fee_data.unwrap();
+        
+        let (token, fee) = match e.get_retention_config() {
+            RetentionConfig::Some(fee_data) => {
+                if fee_data.1 <= 0 {
+                    e.panic_with_error(Error::InvalidConfigVersion);
+                }
+                fee_data
+            }
+            RetentionConfig::None => {
+                e.panic_with_error(Error::InvalidConfigVersion);
+            }
+        };
 
-        //calculate amount of tokens to charge
-        let charge = fee.checked_mul(days.into()).unwrap();
-        if charge == 0 {
-            return;
+        //get minutes to extend
+        let minutes = amount * 1440 / fee; //minute is min period to extend. fee is value per day, so we divide by minutes in a day
+        if minutes <= 0 {
+            e.panic_with_error(Error::InvalidAmount);
         }
+
+        //get actual price for the extension
+        let charge = minutes * fee / 1440;
 
         //burn the corresponding amount of fee tokens
-        TokenClient::new(&e, &fee_token).burn(&sponsor, &charge);
+        TokenClient::new(&e, &token).burn(&sponsor, &charge);
 
         //load expiration info
         let mut expiration = e.get_expiration();
-        let mut asset_expiration = expiration.get(asset_index).unwrap_or_default();
         let now = now(&e);
+        let mut asset_expiration = expiration
+            .get(asset_index)
+            .unwrap_or_else(|| now + days_to_milliseconds(INITIAL_EXPIRATION_PERIOD));
         //if the asset expiration is not set, or it's already expired - set it to now
         if asset_expiration == 0 || asset_expiration < now {
             asset_expiration = now;
         }
         //bump expiration
         asset_expiration = asset_expiration
-            .checked_add(days_to_milliseconds(days))
+            .checked_add(minutes_to_milliseconds(minutes as u32))
             .unwrap();
-        //write the vector that holds expiration dates for all symbols
+        //write into the vector that holds expiration dates for all symbols
         expiration.set(asset_index, asset_expiration);
         //update instance
         e.set_expiration(&expiration)
-    }
-
-    // Estimates the cost of asset retention bump
-    //
-    // # Arguments
-    //
-    // * `days` - Number of days
-    //
-    // # Returns
-    //
-    // Amount that will be charged for the expiration bump for a given number of days
-    //
-    // # Panics
-    //
-    // Panics if the retention config hasn't been initialized
-    pub fn estimate_extend(e: &Env, days: u32) -> i128 {
-        let fee_data = e.get_retention_config();
-        if fee_data.is_none() {
-            e.panic_with_error(Error::InvalidConfigVersion);
-        }
-        let (_, fee) = fee_data.unwrap();
-
-        fee.checked_mul(days.into()).unwrap()
     }
 
     // Returns the fee token address and daily retainer fee amount.
@@ -398,7 +364,7 @@ impl PriceOracleContract {
     // # Returns
     //
     // Fee token address and daily price feed retainer fee amount
-    pub fn retention_config(e: &Env) -> Option<(Address, i128)> {
+    pub fn retention_config(e: &Env) -> RetentionConfig {
         e.get_retention_config()
     }
 
@@ -432,11 +398,12 @@ impl PriceOracleContract {
         e.set_base_asset(&config.base_asset);
         e.set_decimals(config.decimals);
         e.set_resolution(config.resolution);
-        e.set_retention_period(config.period);
+        e.set_history_retention_period(config.period);
         e.set_cache_size(config.cache_size);
-        //set update timestamp to 1 to indicate that contract is already v2
-        e.set_v2_update_ts(1);
-
+        e.set_retention_config(config.retention_config);
+        //set protocol version to current
+        e.set_protocol(CURRENT_PROTOCOL);
+        //add assets
         add_assets(&e, config.assets);
     }
 
@@ -472,12 +439,12 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address, or if the period/version is invalid
-    pub fn set_period(e: &Env, period: u64) {
+    pub fn set_history_retention_period(e: &Env, period: u64) {
         e.panic_if_not_admin();
-        e.set_retention_period(period);
+        e.set_history_retention_period(period);
     }
 
-    // Sets the fee token address and daily retainer fee amount.
+    // Sets the fee token address and daily asset feed retainer fee amount.
     // Can be invoked only by the admin account.
     //
     // # Arguments
@@ -487,7 +454,7 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address, or not initialized yet
-    pub fn set_retention_config(e: &Env, retention_config: (Address, i128)) {
+    pub fn set_retention_config(e: &Env, retention_config: RetentionConfig) {
         e.panic_if_not_admin();
         e.set_retention_config(retention_config);
         let mut expiration = e.get_expiration();
@@ -496,7 +463,7 @@ impl PriceOracleContract {
         }
         //init expiration, set 365 days for all symbols by default
         let exp = now(&e)
-            .checked_add(days_to_milliseconds(DEFAULT_EXPIRATION_PERIOD))
+            .checked_add(days_to_milliseconds(INITIAL_EXPIRATION_PERIOD))
             .unwrap();
         let assets = e.get_assets();
         for _ in 0..assets.len() {
@@ -531,16 +498,11 @@ impl PriceOracleContract {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
 
-        let retention_period = e.get_retention_period();
+        let retention_period = e.get_history_retention_period();
 
-        //TODO: compute ledgers per second, for now we assume 5 seconds per ledger
-        let ledgers_to_live: u32 = ((retention_period / 1000 / 5) + 1) as u32;
+        let ledgers_to_live = ((retention_period / 1000 / 5 + 1) * 2) as u32;
 
-        ensure_v2_update_ts(&e);
-        //update legacy for 24 hours after v2 update
-        if !is_legacy_expired(&e, timestamp) {
-            update_price_legacy(&e, &updates, timestamp, ledgers_to_live);
-        }
+        update_price_v1(&e, &updates, timestamp, ledger_timestamp, ledgers_to_live);
 
         //get the last timestamp
         let last_timestamp = e.get_last_timestamp();
@@ -549,13 +511,13 @@ impl PriceOracleContract {
         e.set_prices(&updates, timestamp, ledgers_to_live);
 
         //update the cache
-        let mut cache = e.get_cache().unwrap_or(Vec::new(&e));
         let cache_size = e.get_cache_size();
-        cache.push_front((timestamp, updates.clone()));
-        while cache.len() > cache_size {
-            cache.pop_back(); //remove the oldest record if cache size exceeded
-        }
-        if cache_size > 0 { //if cache size is set, update the cache
+        if cache_size > 0 { //if cache size is non-empty, store it in the instance
+            let mut cache = e.get_cache().unwrap_or(Vec::new(&e));
+            cache.push_front((timestamp, updates.clone()));
+            while cache.len() > cache_size {
+                cache.pop_back(); //remove the oldest record if cache size exceeded
+            }
             e.set_cache(cache);
         }
 
@@ -564,10 +526,29 @@ impl PriceOracleContract {
             e.set_last_timestamp(timestamp);
         }
 
+        //get the assets
+        let assets = e.get_assets();
+        //event updates
+        let mut event_updates = Vec::new(&e);
+        for (index, asset) in assets.iter().enumerate() {
+            let price = updates.get(index as u32).unwrap_or(0i128);
+            if price == 0 {
+                continue; //skip zero prices
+            }
+            let symbol = match asset {
+                Asset::Stellar(address) => {
+                    address.to_val()
+                },
+                Asset::Other(symbol) => {
+                    symbol.to_val()
+                }
+            };
+            event_updates.push_back((symbol, price));
+        }
         //publish the price updates
         e.events().publish(
-            (REFLECTOR, symbol_short!("prices"), symbol_short!("update")),
-            updates,
+            (REFLECTOR, symbol_short!("update"), timestamp),
+            event_updates
         );
     }
 
@@ -583,7 +564,7 @@ impl PriceOracleContract {
     // Panics if the caller doesn't match admin address
     pub fn update_contract(env: &Env, wasm_hash: BytesN<32>) {
         env.panic_if_not_admin();
-        env.deployer().update_current_contract_wasm(wasm_hash)
+        env.deployer().update_current_contract_wasm(wasm_hash);
     }
 }
 
@@ -674,11 +655,8 @@ fn get_x_price(
     timestamp: u64,
     decimals: u32,
 ) -> Option<PriceData> {
-    let asset_pair_indexes = get_asset_pair_indexes(e, base_asset, quote_asset);
-    if asset_pair_indexes.is_none() {
-        return None;
-    }
-    get_x_price_by_indexes(e, asset_pair_indexes.unwrap(), timestamp, decimals)
+    let asset_pair_indexes = get_asset_pair_indexes(e, base_asset, quote_asset)?;
+    get_x_price_by_indexes(e, asset_pair_indexes, timestamp, decimals)
 }
 
 fn get_x_price_by_indexes(
@@ -687,11 +665,7 @@ fn get_x_price_by_indexes(
     timestamp: u64,
     decimals: u32,
 ) -> Option<PriceData> {
-
-    if !is_legacy_expired(e, now(e)) {
-        return get_x_price_by_indexes_legacy(e, asset_pair_indexes, timestamp, decimals);
-    }
-
+    //get the asset indexes
     let (base_asset, quote_asset) = asset_pair_indexes;
     //check if the asset are the same
     if base_asset == quote_asset {
@@ -701,53 +675,39 @@ fn get_x_price_by_indexes(
     let prices = e.get_prices(timestamp);
 
     //get the price for base_asset
-    let base_asset_price = get_price_data_by_index(base_asset, timestamp, &prices);
-    if base_asset_price.is_none() {
-        return None;
-    }
+    let base_asset_price = get_price_data_by_index(e, base_asset, timestamp, &prices)?;
 
     //get the price for quote_asset
-    let quote_asset_price = get_price_data_by_index(quote_asset, timestamp, &prices);
-    if quote_asset_price.is_none() {
-        return None;
-    }
+    let quote_asset_price = get_price_data_by_index(e, quote_asset, timestamp, &prices)?;
 
     //calculate the cross price
     Some(get_normalized_price_data(
         base_asset_price
-            .unwrap()
             .price
-            .fixed_div_floor(quote_asset_price.unwrap().price, decimals),
+            .fixed_div_floor(quote_asset_price.price, decimals),
         timestamp,
     ))
 }
 
 fn get_asset_pair_indexes(e: &Env, base_asset: Asset, quote_asset: Asset) -> Option<(u32, u32)> {
-    let base_asset = e.get_asset_index(&base_asset);
-    if base_asset.is_none() {
-        return None;
-    }
+    let base_asset = e.get_asset_index(&base_asset)?;
 
-    let quote_asset = e.get_asset_index(&quote_asset);
-    if quote_asset.is_none() {
-        return None;
-    }
+    let quote_asset = e.get_asset_index(&quote_asset)?;
 
-    Some((base_asset.unwrap(), quote_asset.unwrap()))
+    Some((base_asset, quote_asset))
 }
 
 fn get_price_data(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
-    let asset: Option<u32> = e.get_asset_index(&asset);
-    if asset.is_none() {
-        return None;
-    }
-    if !is_legacy_expired(e, now(e)) {
-        return get_price_data_by_index_legacy(e, asset.unwrap() as u8, timestamp);
-    }
-    get_price_data_by_index(asset.unwrap(), timestamp, &e.get_prices(timestamp))
+    let asset = e.get_asset_index(&asset)?;
+    get_price_data_by_index(e, asset, timestamp, &e.get_prices(timestamp))
 }
 
-fn get_price_data_by_index(asset: u32, timestamp: u64, prices: &Option<Vec<i128>>) -> Option<PriceData> {
+fn get_price_data_by_index(e: &Env, asset: u32, timestamp: u64, prices: &Option<Vec<i128>>) -> Option<PriceData> {
+    //if the protocol version is not current, use legacy method
+    if !is_current_protocol_version(e, now(e)) {
+        let price = e.get_price(asset as u8, timestamp)?;
+        return Some(get_normalized_price_data(price, timestamp));
+    }
     if prices.is_none() {
         return None;
     }
@@ -756,7 +716,7 @@ fn get_price_data_by_index(asset: u32, timestamp: u64, prices: &Option<Vec<i128>
     if prices.len() <= asset {
         return None;
     }
-    let price = prices.get_unchecked(asset);
+    let price = prices.get(asset)?;
     if price == 0 {
         return None;
     }
@@ -773,11 +733,11 @@ fn get_normalized_price_data(price: i128, timestamp: u64) -> PriceData {
 fn add_assets(e: &Env, assets: Vec<Asset>) {
     //use default expiration period for new assets
     let expiration_timestamp = now(&e)
-        .checked_add(days_to_milliseconds(DEFAULT_EXPIRATION_PERIOD))
+        .checked_add(days_to_milliseconds(INITIAL_EXPIRATION_PERIOD))
         .unwrap();
     let mut current_assets = e.get_assets();
     let mut expiration = e.get_expiration();
-    let retention_config_initialized = e.get_retention_config().is_some();
+    let is_retention_config_set = e.get_retention_config() != RetentionConfig::None;
     for asset in assets.iter() {
         //check if the asset has been already added
         if e.get_asset_index(&asset).is_some() {
@@ -786,8 +746,8 @@ fn add_assets(e: &Env, assets: Vec<Asset>) {
         e.set_asset_index(&asset, current_assets.len());
         current_assets.push_back(asset);
 
-        //if the fee is not initialized, we don't need to set the expiration
-        if retention_config_initialized {
+        //if the fee is not set, we don't need to set the expiration
+        if is_retention_config_set {
             expiration.push_back(expiration_timestamp); //set expiration
         }
     }
@@ -802,18 +762,32 @@ fn days_to_milliseconds(days: u32) -> u64 {
     (days as u64) * 24 * 60 * 60 * 1000 //convert to milliseconds
 }
 
-fn ensure_v2_update_ts(e: &Env) {
-    //ensure that the v2 update timestamp is set
-    if e.get_v2_update_ts() == 0 {
-        e.set_v2_update_ts(now(e));
+fn minutes_to_milliseconds(minutes: u32) -> u64 {
+    (minutes as u64) * 60 * 1000 //convert to milliseconds
+}
+
+fn is_current_protocol_version(e: &Env, now: u64) -> bool {
+    let protocol = e.get_protocol();
+    if protocol == CURRENT_PROTOCOL {
+        return true;
     }
+    let update_ts = e.get_update_ts();
+    if update_ts == 0 {
+        e.set_update_ts(now); //set update timestamp to now if not set
+        return false;
+    } else if update_ts + days_to_milliseconds(1) < now {
+        e.set_protocol(CURRENT_PROTOCOL); //set protocol to current if the update timestamp is older than 1 day
+        e.set_update_ts(0); // reset update timestamp
+        return true;
+    }
+    false
 }
 
-fn is_legacy_expired(e: &Env, timestamp: u64) -> bool {
-    e.get_v2_update_ts() + days_to_milliseconds(1) < timestamp
-}
-
-fn update_price_legacy(e: &Env, updates: &Vec<i128>, timestamp: u64, ledgers_to_live: u32) {
+fn update_price_v1(e: &Env, updates: &Vec<i128>, timestamp: u64, ledger_timestamp: u64, ledgers_to_live: u32) {
+    //if the protocol version is current, we can skip the legacy update
+    if !is_current_protocol_version(e, ledger_timestamp) {
+        return;
+    }
     let assets = e.get_assets();
     let mut asset_prices: Vec<(Asset, i128)> = Vec::new(&e);
     //iterate over the updates
@@ -831,42 +805,4 @@ fn update_price_legacy(e: &Env, updates: &Vec<i128>, timestamp: u64, ledgers_to_
         //store the new price
         e.set_price(asset, price, timestamp, ledgers_to_live);
     }
-}
-
-fn get_price_data_by_index_legacy(e: &Env, asset: u8, timestamp: u64) -> Option<PriceData> {
-    let price = e.get_price(asset, timestamp);
-    if price.is_none() {
-        return None;
-    }
-    Some(get_normalized_price_data(price.unwrap(), timestamp))
-}
-
-fn get_x_price_by_indexes_legacy(
-    e: &Env,
-    asset_pair_indexes: (u32, u32),
-    timestamp: u64,
-    decimals: u32,
-) -> Option<PriceData> {
-    let (base_asset, quote_asset) = asset_pair_indexes;
-
-    //get the price for base_asset
-    let base_asset_price = get_price_data_by_index_legacy(e, base_asset as u8, timestamp);
-    if base_asset_price.is_none() {
-        return None;
-    }
-
-    //get the price for quote_asset
-    let quote_asset_price = get_price_data_by_index_legacy(e, quote_asset as u8, timestamp);
-    if quote_asset_price.is_none() {
-        return None;
-    }
-
-    //calculate the cross price
-    Some(get_normalized_price_data(
-        base_asset_price
-            .unwrap()
-            .price
-            .fixed_div_floor(quote_asset_price.unwrap().price, decimals),
-        timestamp,
-    ))
 }

@@ -1,5 +1,7 @@
 use soroban_sdk::{contracttype, Address, Vec};
 
+use crate::types::retention_config::RetentionConfig;
+
 use super::asset::Asset;
 
 #[contracttype]
@@ -20,5 +22,7 @@ pub struct ConfigData {
     // The resolution of the prices.
     pub resolution: u32,
     // The cache size for the prices.
-    pub cache_size: u32
+    pub cache_size: u32,
+    // The retention config for the contract. Token address and fee amount.
+    pub retention_config: RetentionConfig,
 }

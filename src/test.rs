@@ -47,7 +47,8 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         base_asset: Asset::Stellar(Address::generate(&env)),
         decimals: 14,
         resolution: RESOLUTION,
-        cache_size: 0
+        cache_size: 0,
+        retention_config: RetentionConfig::None,
     };
 
     env.mock_all_auths();
@@ -111,7 +112,7 @@ fn init_test() {
     let resolution = client.resolution();
     assert_eq!(resolution, RESOLUTION / 1000);
 
-    let period = client.period().unwrap();
+    let period = client.history_retention_period().unwrap();
     assert_eq!(period, init_data.period / 1000);
 
     let decimals = client.decimals();
@@ -376,9 +377,9 @@ fn set_period_test() {
 
     env.mock_all_auths();
 
-    client.set_period(&period);
+    client.set_history_retention_period(&period);
 
-    let result = client.period().unwrap();
+    let result = client.history_retention_period().unwrap();
 
     assert_eq!(result, convert_to_seconds(period));
 }
@@ -679,12 +680,12 @@ fn authorized_test() {
             address: &config_data.admin,
             invoke: &MockAuthInvoke {
                 contract: &client.address,
-                fn_name: "set_period",
+                fn_name: "set_history_retention_period",
                 args: Vec::from_array(&env, [period.clone().try_into_val(&env).unwrap()]),
                 sub_invokes: &[],
             },
         }])
-        .set_period(&period);
+        .set_history_retention_period(&period);
 }
 
 #[test]
@@ -706,7 +707,7 @@ fn unauthorized_test() {
                 sub_invokes: &[],
             },
         }])
-        .set_period(&period);
+        .set_history_retention_period(&period);
 }
 
 #[test]
@@ -748,19 +749,16 @@ fn set_retention_config_test() {
         env.storage().instance().remove(&"expiration");
     });
 
-    let fee_data = client.retention_config();
-    assert!(fee_data.is_none());
-
     //create fee asset token
     let fee_asset = env.register_stellar_asset_contract_v2(init_data.admin.clone());
 
-    let retention_config = (fee_asset.address(), 7);
+    let retention_config = RetentionConfig::Some((fee_asset.address(), 7));
 
     client.set_retention_config(&retention_config);
 
     let result = client.retention_config();
-    assert!(result.is_some());
-    assert_eq!(result.unwrap(), retention_config);
+    assert_ne!(result, RetentionConfig::None);
+    assert_eq!(result, retention_config);
 
     let asset: Asset = init_data.assets.get_unchecked(0);
 
@@ -768,13 +766,14 @@ fn set_retention_config_test() {
     assert!(expires.is_some());
 
     let sponsor = Address::generate(&env);
-    let fee_token = StellarAssetClient::new(&env, &retention_config.0);
-    fee_token.mint(&sponsor, &100);
-
-    let bump_price = client.estimate_extend(&10);
-    assert_eq!(bump_price, 70);
+    let fee_token = StellarAssetClient::new(&env, &fee_asset.address());
+    fee_token.mint(&sponsor, &10);
     
     let symbol_expires = client.expires(&asset).unwrap();
-    client.extend(&sponsor, &asset, &10);
-    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + days_to_milliseconds(10));
+    client.extend_asset_ttl(&sponsor, &asset, &10);
+    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 2057 * 60 * 1000); //2057 minutes you get for 9 XRF tokens
+
+    let fee_token_balance = TokenClient::new(&env, &fee_asset.address())
+        .balance(&sponsor);
+    assert_eq!(fee_token_balance, 1); //1 XRF token is left after paying the fee
 }

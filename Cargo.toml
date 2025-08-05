@@ -1,6 +1,6 @@
 [package]
 name = "reflector-oracle"
-version = "5.0.0"
+version = "6.0.0"
 edition = "2021"
 
 [lib]
@@ -17,10 +17,10 @@ codegen-units = 1
 lto = true
 
 [dependencies]
-soroban-sdk = "22.0.7"
+soroban-sdk = "22.0.8"
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.7", features = ["testutils"] }
+soroban-sdk = { version = "22.0.8", features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

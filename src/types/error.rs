@@ -20,4 +20,6 @@ pub enum Error {
     InvalidUpdateLength = 6,
     // The assets storage is full
     AssetLimitExceeded = 7,
+    // The amount is invalid (e.g., negative or zero).
+    InvalidAmount = 8,
 }

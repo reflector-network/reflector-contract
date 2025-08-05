@@ -5,7 +5,7 @@ use soroban_sdk::{panic_with_error, Address, Env, Vec};
 use crate::extensions::u128_helper::U128Helper;
 use crate::types;
 
-use types::{asset::Asset, error::Error};
+use types::{asset::Asset, error::Error, retention_config::RetentionConfig};
 const ADMIN_KEY: &str = "admin";
 const LAST_TIMESTAMP: &str = "last_timestamp";
 const RETENTION_PERIOD: &str = "period";
@@ -18,7 +18,11 @@ const RETENTION: &str = "retention";
 const CACHE: &str = "cache";
 const CACHE_SIZE: &str = "cache_size";
 
-const V2_UPDATE_TS: &str = "v2_update_ts";
+const UPDATE_TS: &str = "update_ts";
+const PROTOCOL: &str = "protocol";
+
+const XRF_TOKEN_ADDRESS: &str = "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LULV5TU35N2CIZA";
+const DEFAULT_RETENTION_FEE: i128 = 100_000_000;
 
 pub trait EnvExtensions {
     fn get_admin(&self) -> Option<Address>;
@@ -37,17 +41,17 @@ pub trait EnvExtensions {
 
     fn set_resolution(&self, resolution: u32);
 
-    fn get_retention_period(&self) -> u64;
+    fn get_history_retention_period(&self) -> u64;
 
-    fn set_retention_period(&self, period: u64);
+    fn set_history_retention_period(&self, period: u64);
 
     fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128>;
 
-    fn set_price(&self, asset: u8, price: i128, timestamp: u64, ledgers: u32);
+    fn set_price(&self, asset: u8, price: i128, timestamp: u64, bump_ledgers_count: u32);
 
     fn get_prices(&self, timestamp: u64) -> Option<Vec<i128>>;
 
-    fn set_prices(&self, prices: &Vec<i128>, timestamp: u64, ledgers: u32);
+    fn set_prices(&self, prices: &Vec<i128>, timestamp: u64, bump_ledgers_count: u32);
 
     fn get_cache(&self) -> Option<Vec<(u64, Vec<i128>)>>;
 
@@ -73,17 +77,21 @@ pub trait EnvExtensions {
 
     fn get_expiration(&self) -> Vec<u64>;
 
-    fn set_retention_config(&self, fee_data: (Address, i128));
+    fn set_retention_config(&self, retention_config: RetentionConfig);
 
-    fn get_retention_config(&self) -> Option<(Address, i128)>;
+    fn get_retention_config(&self) -> RetentionConfig;
 
     fn panic_if_not_admin(&self);
 
     fn is_initialized(&self) -> bool;
 
-    fn get_v2_update_ts(&self) -> u64;
+    fn get_update_ts(&self) -> u64;
 
-    fn set_v2_update_ts(&self, timestamp: u64);
+    fn set_update_ts(&self, timestamp: u64);
+
+    fn get_protocol(&self) -> u32;
+
+    fn set_protocol(&self, protocol: u32);
 }
 
 impl EnvExtensions for Env {
@@ -123,13 +131,13 @@ impl EnvExtensions for Env {
         get_instance_storage(&self).set(&RESOLUTION, &resolution)
     }
 
-    fn get_retention_period(&self) -> u64 {
+    fn get_history_retention_period(&self) -> u64 {
         get_instance_storage(&self)
             .get(&RETENTION_PERIOD)
             .unwrap_or_default()
     }
 
-    fn set_retention_period(&self, rdm_period: u64) {
+    fn set_history_retention_period(&self, rdm_period: u64) {
         get_instance_storage(&self).set(&RETENTION_PERIOD, &rdm_period);
     }
 
@@ -140,16 +148,16 @@ impl EnvExtensions for Env {
         get_temporary_storage(self).get(&data_key)
     }
 
-    fn set_price(&self, asset: u8, price: i128, timestamp: u64, ledgers_to_live: u32) {
+    fn set_price(&self, asset: u8, price: i128, timestamp: u64, bump_ledgers_count: u32) {
         //build the key for the price
         let data_key = U128Helper::encode_price_record_key(timestamp, asset);
 
         //set the price
         let temps_storage = get_temporary_storage(&self);
         temps_storage.set(&data_key, &price);
-        if ledgers_to_live > 16 {
+        if bump_ledgers_count > 16 {
             //16 is the minimum number
-            temps_storage.extend_ttl(&data_key, ledgers_to_live, ledgers_to_live)
+            temps_storage.extend_ttl(&data_key, bump_ledgers_count, bump_ledgers_count)
         }
     }
 
@@ -168,13 +176,13 @@ impl EnvExtensions for Env {
         get_temporary_storage(self).get(&timestamp)
     }
 
-    fn set_prices(&self, prices: &Vec<i128>, timestamp: u64, ledgers: u32) {
+    fn set_prices(&self, prices: &Vec<i128>, timestamp: u64, bump_ledgers_count: u32) {
         //set the price
         let temps_storage = get_temporary_storage(&self);
         temps_storage.set(&timestamp, prices);
-        if ledgers > 16 {
+        if bump_ledgers_count > 16 {
             //16 is the minimum number
-            temps_storage.extend_ttl(&timestamp, ledgers, ledgers)
+            temps_storage.extend_ttl(&timestamp, bump_ledgers_count, bump_ledgers_count)
         }
     }
 
@@ -187,7 +195,7 @@ impl EnvExtensions for Env {
     }
 
     fn get_cache_size(&self) -> u32 {
-        get_instance_storage(self).get(&CACHE_SIZE).unwrap_or(0)
+        get_instance_storage(self).get(&CACHE_SIZE).unwrap_or(2)
     }
 
     fn set_cache_size(&self, cache_size: u32) {
@@ -236,10 +244,7 @@ impl EnvExtensions for Env {
                 index = get_instance_storage(self).get(&symbol);
             }
         }
-        if index.is_none() {
-            return None;
-        }
-        Some(index.unwrap())
+        index
     }
 
     fn set_expiration(&self, expiration: &Vec<u64>) {
@@ -252,12 +257,14 @@ impl EnvExtensions for Env {
             .unwrap_or_else(|| Vec::new(self))
     }
 
-    fn set_retention_config(&self, retention_config: (Address, i128)) {
+    fn set_retention_config(&self, retention_config: RetentionConfig) {
         get_instance_storage(self).set(&RETENTION, &retention_config);
     }
 
-    fn get_retention_config(&self) -> Option<(Address, i128)> {
-        get_instance_storage(self).get(&RETENTION)
+    fn get_retention_config(&self) -> RetentionConfig {
+        get_instance_storage(self)
+            .get(&RETENTION)
+            .unwrap_or_else(|| RetentionConfig::Some((Address::from_str(&self, XRF_TOKEN_ADDRESS), DEFAULT_RETENTION_FEE)))
     }
 
     fn panic_if_not_admin(&self) {
@@ -268,12 +275,20 @@ impl EnvExtensions for Env {
         admin.unwrap().require_auth()
     }
 
-    fn get_v2_update_ts(&self) -> u64 {
-        get_instance_storage(self).get(&V2_UPDATE_TS).unwrap_or(0)
+    fn get_update_ts(&self) -> u64 {
+        get_instance_storage(self).get(&UPDATE_TS).unwrap_or(0)
     }
 
-    fn set_v2_update_ts(&self, timestamp: u64) {
-        get_instance_storage(self).set(&V2_UPDATE_TS, &timestamp);
+    fn set_update_ts(&self, timestamp: u64) {
+        get_instance_storage(self).set(&UPDATE_TS, &timestamp);
+    }
+
+    fn get_protocol(&self) -> u32 {
+        get_instance_storage(self).get(&PROTOCOL).unwrap_or(1)
+    }
+
+    fn set_protocol(&self, protocol: u32) {
+        get_instance_storage(self).set(&PROTOCOL, &protocol);
     }
 }
 
