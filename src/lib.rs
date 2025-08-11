@@ -398,7 +398,7 @@ impl PriceOracleContract {
         e.set_base_asset(&config.base_asset);
         e.set_decimals(config.decimals);
         e.set_resolution(config.resolution);
-        e.set_history_retention_period(config.period);
+        e.set_history_retention_period(config.history_retention_period);
         e.set_cache_size(config.cache_size);
         e.set_retention_config(config.retention_config);
         //set protocol version to current

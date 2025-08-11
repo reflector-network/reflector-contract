@@ -11,8 +11,8 @@ use super::asset::Asset;
 pub struct ConfigData {
     // The admin address.
     pub admin: Address,
-    // The retention period for the prices.
-    pub period: u64,
+    // The history retention period for the prices.
+    pub history_retention_period: u64,
     // The assets supported by the contract.
     pub assets: Vec<Asset>,
     // The base asset for the prices.

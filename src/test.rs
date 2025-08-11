@@ -42,7 +42,7 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
 
     let init_data = ConfigData {
         admin: admin.clone(),
-        period: (100 * RESOLUTION).into(),
+        history_retention_period: (100 * RESOLUTION).into(),
         assets: generate_assets(&env, 10, 0),
         base_asset: Asset::Stellar(Address::generate(&env)),
         decimals: 14,
@@ -113,7 +113,7 @@ fn init_test() {
     assert_eq!(resolution, RESOLUTION / 1000);
 
     let period = client.history_retention_period().unwrap();
-    assert_eq!(period, init_data.period / 1000);
+    assert_eq!(period, init_data.history_retention_period / 1000);
 
     let decimals = client.decimals();
     assert_eq!(decimals, DECIMALS);
