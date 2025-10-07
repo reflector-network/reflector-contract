@@ -716,7 +716,7 @@ fn get_price_data(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
 fn get_price_data_by_index(e: &Env, asset: u32, timestamp: u64, prices: &Option<Vec<i128>>) -> Option<PriceData> {
     //if the protocol version is not current, use legacy method
     if !is_current_protocol_version(e, now(e)) {
-        let price = e.get_price(asset as u8, timestamp)?;
+        let price = e.get_price_v1(asset as u8, timestamp)?;
         return Some(get_normalized_price_data(price, timestamp));
     }
     if prices.is_none() {
@@ -803,6 +803,6 @@ fn update_price_v1(e: &Env, updates: &Vec<i128>, timestamp: u64, ledger_timestam
         }
         let asset = i as u8;
         //store the new price
-        e.set_price(asset, price, timestamp, ledgers_to_live);
+        e.set_price_v1(asset, price, timestamp, ledgers_to_live);
     }
 }

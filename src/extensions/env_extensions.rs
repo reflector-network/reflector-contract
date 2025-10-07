@@ -45,9 +45,9 @@ pub trait EnvExtensions {
 
     fn set_history_retention_period(&self, period: u64);
 
-    fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128>;
+    fn get_price_v1(&self, asset: u8, timestamp: u64) -> Option<i128>;
 
-    fn set_price(&self, asset: u8, price: i128, timestamp: u64, bump_ledgers_count: u32);
+    fn set_price_v1(&self, asset: u8, price: i128, timestamp: u64, bump_ledgers_count: u32);
 
     fn get_prices(&self, timestamp: u64) -> Option<Vec<i128>>;
 
@@ -141,14 +141,14 @@ impl EnvExtensions for Env {
         get_instance_storage(&self).set(&RETENTION_PERIOD, &rtn_period);
     }
 
-    fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128> {
+    fn get_price_v1(&self, asset: u8, timestamp: u64) -> Option<i128> {
         //build the key for the price
         let data_key = U128Helper::encode_price_record_key(timestamp, asset);
         //get the price
         get_temporary_storage(self).get(&data_key)
     }
 
-    fn set_price(&self, asset: u8, price: i128, timestamp: u64, bump_ledgers_count: u32) {
+    fn set_price_v1(&self, asset: u8, price: i128, timestamp: u64, bump_ledgers_count: u32) {
         //build the key for the price
         let data_key = U128Helper::encode_price_record_key(timestamp, asset);
 
