@@ -89,9 +89,9 @@ pub trait EnvExtensions {
 
     fn set_update_ts(&self, timestamp: u64);
 
-    fn get_protocol(&self) -> u32;
+    fn get_protocol_version(&self) -> u32;
 
-    fn set_protocol(&self, protocol: u32);
+    fn set_protocol_version(&self, protocol: u32);
 }
 
 impl EnvExtensions for Env {
@@ -137,8 +137,8 @@ impl EnvExtensions for Env {
             .unwrap_or_default()
     }
 
-    fn set_history_retention_period(&self, rdm_period: u64) {
-        get_instance_storage(&self).set(&RETENTION_PERIOD, &rdm_period);
+    fn set_history_retention_period(&self, rtn_period: u64) {
+        get_instance_storage(&self).set(&RETENTION_PERIOD, &rtn_period);
     }
 
     fn get_price(&self, asset: u8, timestamp: u64) -> Option<i128> {
@@ -153,11 +153,11 @@ impl EnvExtensions for Env {
         let data_key = U128Helper::encode_price_record_key(timestamp, asset);
 
         //set the price
-        let temps_storage = get_temporary_storage(&self);
-        temps_storage.set(&data_key, &price);
+        let temp_storage = get_temporary_storage(&self);
+        temp_storage.set(&data_key, &price);
         if bump_ledgers_count > 16 {
-            //16 is the minimum number
-            temps_storage.extend_ttl(&data_key, bump_ledgers_count, bump_ledgers_count)
+            //16 ledgers is the minimum extension period
+            temp_storage.extend_ttl(&data_key, bump_ledgers_count, bump_ledgers_count)
         }
     }
 
@@ -283,11 +283,11 @@ impl EnvExtensions for Env {
         get_instance_storage(self).set(&UPDATE_TS, &timestamp);
     }
 
-    fn get_protocol(&self) -> u32 {
+    fn get_protocol_version(&self) -> u32 {
         get_instance_storage(self).get(&PROTOCOL).unwrap_or(1)
     }
 
-    fn set_protocol(&self, protocol: u32) {
+    fn set_protocol_version(&self, protocol: u32) {
         get_instance_storage(self).set(&PROTOCOL, &protocol);
     }
 }

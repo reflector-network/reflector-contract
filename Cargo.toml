@@ -17,10 +17,10 @@ codegen-units = 1
 lto = true
 
 [dependencies]
-soroban-sdk = "22.0.8"
+soroban-sdk = "23.0.2"
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.8", features = ["testutils"] }
+soroban-sdk = { version = "23.0.2", features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

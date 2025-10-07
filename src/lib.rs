@@ -8,15 +8,23 @@ use extensions::{
     env_extensions::EnvExtensions, i128_extensions::I128Extensions, u64_extensions::U64Extensions,
 };
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contractevent, panic_with_error, Address, BytesN, Env, Val, Vec};
 use types::{asset::Asset, error::Error};
 use types::{config_data::ConfigData, price_data::PriceData};
 
 use crate::types::retention_config::RetentionConfig;
 
-const REFLECTOR: Symbol = symbol_short!("reflector");
-const INITIAL_EXPIRATION_PERIOD: u32 = 365; //days in year
+const INITIAL_EXPIRATION_PERIOD: u32 = 180; //6 months
 const CURRENT_PROTOCOL: u32 = 2; //current protocol version
+
+#[contractevent(topics = ["REFLECTOR", "update"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpdateEvent {
+    #[topic]
+    pub timestamp: u64,
+    // Fields not marked as topics will appear in the events data section.
+    pub update_data: Vec<(Val, i128)>
+}
 
 #[soroban_sdk::contract]
 pub struct PriceOracleContract;
@@ -281,6 +289,10 @@ impl PriceOracleContract {
     // # Returns
     //
     // Asset expiration timestamp or None if the asset is not supported
+    //
+    // # Panics
+    //
+    // Panics if the asset is not supported
     pub fn expires(e: &Env, asset: Asset) -> Option<u64> {
         let asset_index = e.get_asset_index(&asset);
         if asset_index.is_none() {
@@ -328,16 +340,13 @@ impl PriceOracleContract {
         };
 
         //get minutes to extend
-        let minutes = amount * 1440 / fee; //minute is min period to extend. fee is value per day, so we divide by minutes in a day
-        if minutes <= 0 {
+        let bump = amount * 86400000 / fee; // result in milliseconds
+        if bump <= 0 {
             e.panic_with_error(Error::InvalidAmount);
         }
 
-        //get actual price for the extension
-        let charge = minutes * fee / 1440;
-
         //burn the corresponding amount of fee tokens
-        TokenClient::new(&e, &token).burn(&sponsor, &charge);
+        TokenClient::new(&e, &token).burn(&sponsor, &amount);
 
         //load expiration info
         let mut expiration = e.get_expiration();
@@ -351,7 +360,7 @@ impl PriceOracleContract {
         }
         //bump expiration
         asset_expiration = asset_expiration
-            .checked_add(minutes_to_milliseconds(minutes as u32))
+            .checked_add(bump as u64)
             .unwrap();
         //write into the vector that holds expiration dates for all symbols
         expiration.set(asset_index, asset_expiration);
@@ -402,7 +411,7 @@ impl PriceOracleContract {
         e.set_cache_size(config.cache_size);
         e.set_retention_config(config.retention_config);
         //set protocol version to current
-        e.set_protocol(CURRENT_PROTOCOL);
+        e.set_protocol_version(CURRENT_PROTOCOL);
         //add assets
         add_assets(&e, config.assets);
     }
@@ -461,7 +470,7 @@ impl PriceOracleContract {
         if expiration.len() > 0 {
             return; // expiration values for existing price feeds already initialized
         }
-        //init expiration, set 365 days for all symbols by default
+        //init expiration, set INITIAL_EXPIRATION_PERIOD for all symbols by default
         let exp = now(&e)
             .checked_add(days_to_milliseconds(INITIAL_EXPIRATION_PERIOD))
             .unwrap();
@@ -507,7 +516,7 @@ impl PriceOracleContract {
         //get the last timestamp
         let last_timestamp = e.get_last_timestamp();
 
-        //store the new prices
+        //store new prices in v2 format
         e.set_prices(&updates, timestamp, ledgers_to_live);
 
         //update the cache
@@ -526,7 +535,7 @@ impl PriceOracleContract {
             e.set_last_timestamp(timestamp);
         }
 
-        //get the assets
+        //load all registered assets
         let assets = e.get_assets();
         //event updates
         let mut event_updates = Vec::new(&e);
@@ -545,11 +554,13 @@ impl PriceOracleContract {
             };
             event_updates.push_back((symbol, price));
         }
+
         //publish the price updates
-        e.events().publish(
-            (REFLECTOR, symbol_short!("update"), timestamp),
-            event_updates
-        );
+        let event = UpdateEvent {
+            timestamp,
+            update_data: event_updates,
+        };
+        e.events().publish_event(&event);
     }
 
     // Updates the contract source code. Can be invoked only by the admin account.
@@ -762,12 +773,8 @@ fn days_to_milliseconds(days: u32) -> u64 {
     (days as u64) * 24 * 60 * 60 * 1000 //convert to milliseconds
 }
 
-fn minutes_to_milliseconds(minutes: u32) -> u64 {
-    (minutes as u64) * 60 * 1000 //convert to milliseconds
-}
-
 fn is_current_protocol_version(e: &Env, now: u64) -> bool {
-    let protocol = e.get_protocol();
+    let protocol = e.get_protocol_version();
     if protocol == CURRENT_PROTOCOL {
         return true;
     }
@@ -776,7 +783,7 @@ fn is_current_protocol_version(e: &Env, now: u64) -> bool {
         e.set_update_ts(now); //set update timestamp to now if not set
         return false;
     } else if update_ts + days_to_milliseconds(1) < now {
-        e.set_protocol(CURRENT_PROTOCOL); //set protocol to current if the update timestamp is older than 1 day
+        e.set_protocol_version(CURRENT_PROTOCOL); //set protocol to current if the update timestamp is older than 1 day
         e.set_update_ts(0); // reset update timestamp
         return true;
     }
@@ -788,15 +795,8 @@ fn update_price_v1(e: &Env, updates: &Vec<i128>, timestamp: u64, ledger_timestam
     if !is_current_protocol_version(e, ledger_timestamp) {
         return;
     }
-    let assets = e.get_assets();
-    let mut asset_prices: Vec<(Asset, i128)> = Vec::new(&e);
     //iterate over the updates
     for (i, price) in updates.iter().enumerate() {
-        let asset = assets.get(i as u32);
-        if asset.is_some() {
-            //asset can be None if the asset was added but the update is not applied yet
-            asset_prices.push_back((asset.unwrap(), price));
-        }
         //don't store zero prices
         if price == 0 {
             continue;

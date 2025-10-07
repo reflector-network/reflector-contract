@@ -5,7 +5,7 @@ extern crate std;
 use super::*;
 use alloc::string::ToString;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo, MockAuth, MockAuthInvoke}, token::StellarAssetClient, Address, Env, String, Symbol, TryIntoVal
+    symbol_short, testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke}, token::StellarAssetClient, Address, Env, IntoVal, String, Symbol, TryIntoVal
 };
 use std::panic::{self, AssertUnwindSafe};
 
@@ -135,6 +135,8 @@ fn set_price_test() {
 
     //set prices for assets
     client.set_price(&updates, &timestamp);
+
+    assert_eq!(env.events().all().last().unwrap().1, (symbol_short!("REFLECTOR"),  symbol_short!("update"), &600_000u64).into_val(&env));
 }
 
 #[test]
@@ -771,9 +773,9 @@ fn set_retention_config_test() {
     
     let symbol_expires = client.expires(&asset).unwrap();
     client.extend_asset_ttl(&sponsor, &asset, &10);
-    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 2057 * 60 * 1000); //2057 minutes you get for 9 XRF tokens
+    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 123428571); //123428571 ms you get for 9 XRF tokens
 
     let fee_token_balance = TokenClient::new(&env, &fee_asset.address())
         .balance(&sponsor);
-    assert_eq!(fee_token_balance, 1); //1 XRF token is left after paying the fee
+    assert_eq!(fee_token_balance, 0); //1 XRF token is left after paying the fee
 }
