@@ -7,22 +7,22 @@ use super::asset::Asset;
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 
-// The configuration parameters for the contract.
+// Contract configuration parameters
 pub struct ConfigData {
-    // The admin address.
+    // Admin address
     pub admin: Address,
-    // The history retention period for the prices.
+    // Price history retention period
     pub history_retention_period: u64,
-    // The assets supported by the contract.
+    // List of supported assets
     pub assets: Vec<Asset>,
-    // The base asset for the prices.
+    // Base asset
     pub base_asset: Asset,
-    // The number of decimals for the prices.
+    // Number of decimals for price records
     pub decimals: u32,
-    // The resolution of the prices.
+    // History timeframe resolution
     pub resolution: u32,
-    // The cache size for the prices.
+    // Number of rounds held in instance cache
     pub cache_size: u32,
-    // The retention config for the contract. Token address and fee amount.
+    // Contract retention config
     pub retention_config: RetentionConfig,
 }

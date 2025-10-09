@@ -2,10 +2,10 @@ use soroban_sdk::contracttype;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-// The price data for an asset at a given timestamp.
+// Asset price data at specific timestamp
 pub struct PriceData {
-    // The price in contracts' base asset and decimals.
+    // Price stored with configured decimals places
     pub price: i128,
-    // The timestamp of the price.
+    // Record timestamp
     pub timestamp: u64,
 }

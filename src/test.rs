@@ -4,12 +4,11 @@ extern crate std;
 
 use super::*;
 use alloc::string::ToString;
-use soroban_sdk::{
-    symbol_short, testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke}, token::StellarAssetClient, Address, Env, IntoVal, String, Symbol, TryIntoVal
-};
+use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
+use soroban_sdk::{symbol_short, Address, Env, IntoVal, String, Symbol, TryIntoVal};
 use std::panic::{self, AssertUnwindSafe};
-
-use {extensions::i128_extensions::I128Extensions, types::asset::Asset};
+use types::asset::Asset;
 
 const RESOLUTION: u32 = 300_000;
 const DECIMALS: u32 = 14;
@@ -136,7 +135,15 @@ fn set_price_test() {
     //set prices for assets
     client.set_price(&updates, &timestamp);
 
-    assert_eq!(env.events().all().last().unwrap().1, (symbol_short!("REFLECTOR"),  symbol_short!("update"), &600_000u64).into_val(&env));
+    assert_eq!(
+        env.events().all().last().unwrap().1,
+        (
+            symbol_short!("REFLECTOR"),
+            symbol_short!("update"),
+            &600_000u64
+        )
+            .into_val(&env)
+    );
 }
 
 #[test]
@@ -235,16 +242,19 @@ fn prices_test() {
     assert_ne!(result, None);
     assert_eq!(
         result,
-        Some(Vec::from_array(&env, [
-            PriceData {
-                price: normalize_price(200),
-                timestamp: convert_to_seconds(900_000)
-            },
-            PriceData {
-                price: normalize_price(100),
-                timestamp: convert_to_seconds(600_000)
-            }
-        ]))
+        Some(Vec::from_array(
+            &env,
+            [
+                PriceData {
+                    price: normalize_price(200),
+                    timestamp: convert_to_seconds(900_000)
+                },
+                PriceData {
+                    price: normalize_price(100),
+                    timestamp: convert_to_seconds(600_000)
+                }
+            ]
+        ))
     );
 }
 
@@ -264,16 +274,19 @@ fn x_prices_test() {
     assert_ne!(result, None);
     assert_eq!(
         result,
-        Some(Vec::from_array(&env, [
-            PriceData {
-                price: normalize_price(1),
-                timestamp: convert_to_seconds(900_000)
-            },
-            PriceData {
-                price: normalize_price(1),
-                timestamp: convert_to_seconds(600_000)
-            }
-        ]))
+        Some(Vec::from_array(
+            &env,
+            [
+                PriceData {
+                    price: normalize_price(1),
+                    timestamp: convert_to_seconds(900_000)
+                },
+                PriceData {
+                    price: normalize_price(1),
+                    timestamp: convert_to_seconds(600_000)
+                }
+            ]
+        ))
     );
 }
 
@@ -345,7 +358,7 @@ fn assets_update_overflow_test() {
     env.cost_estimate().budget().reset_unlimited();
 
     let mut assets = Vec::new(&env);
-    for i in 1..=256 {
+    for i in 1..=1000 {
         assets.push_back(Asset::Other(Symbol::new(
             &env,
             &("Asset".to_string() + &i.to_string()),
@@ -732,7 +745,9 @@ fn div_tests() {
     ];
 
     for (a, b, expected) in test_cases.iter() {
-        let result = panic::catch_unwind(AssertUnwindSafe(|| a.fixed_div_floor(*b, 14)));
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
+            prices::fixed_div_floor(a.clone(), *b, 14)
+        }));
         if expected == &-1 {
             assert!(result.is_err());
         } else {
@@ -770,12 +785,11 @@ fn set_retention_config_test() {
     let sponsor = Address::generate(&env);
     let fee_token = StellarAssetClient::new(&env, &fee_asset.address());
     fee_token.mint(&sponsor, &10);
-    
+
     let symbol_expires = client.expires(&asset).unwrap();
     client.extend_asset_ttl(&sponsor, &asset, &10);
     assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 123428571); //123428571 ms you get for 9 XRF tokens
 
-    let fee_token_balance = TokenClient::new(&env, &fee_asset.address())
-        .balance(&sponsor);
+    let fee_token_balance = TokenClient::new(&env, &fee_asset.address()).balance(&sponsor);
     assert_eq!(fee_token_balance, 0); //1 XRF token is left after paying the fee
 }

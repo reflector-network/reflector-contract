@@ -1,0 +1,265 @@
+use crate::{protocol, timestamps};
+use crate::types::price_data::PriceData;
+use crate::settings;
+use soroban_sdk::{Env, Vec};
+
+const CACHE_KEY: &str = "cache";
+const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
+
+// Get last known record timestamp
+pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
+    let last_timestamp = get_last_timestamp(e);
+    let ledger_timestamp = timestamps::ledger_timestamp(&e);
+    let resolution = settings::get_resolution(e) as u64;
+    if last_timestamp == 0 //no prices yet
+        || last_timestamp > ledger_timestamp //last timestamp is in the future
+        || ledger_timestamp - last_timestamp >= resolution * 2
+    //last timestamp is too far in the past, so we cannot return the last price
+    {
+        return 0;
+    }
+    last_timestamp
+}
+
+// Retrieve price from record for specific asset
+pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<PriceData> {
+    //load price data for given timestamp
+    let prices = get_prices(e, timestamp);
+    //if the protocol version is not current, use legacy method
+    if !protocol::at_latest_protocol_version(e) {
+        let price = get_price_v1(e, asset as u8, timestamp)?;
+        return Some(normalize_price_data(price, timestamp));
+    }
+    if prices.is_none() {
+        return None;
+    }
+    let prices = prices.as_ref().unwrap();
+    if prices.len() <= asset {
+        return None;
+    }
+    let price = prices.get(asset)?;
+    if price == 0 {
+        return None;
+    }
+    Some(normalize_price_data(price, timestamp))
+}
+
+fn normalize_price_data(price: i128, timestamp: u64) -> PriceData {
+    PriceData {
+        price,
+        timestamp: timestamp / 1000, //convert to seconds
+    }
+}
+
+// Load last update timestamp
+pub fn get_last_timestamp(e: &Env) -> u64 {
+    //get the marker
+    e.storage()
+        .instance()
+        .get(&LAST_TIMESTAMP_KEY)
+        .unwrap_or_default()
+}
+
+// Store last update timestamp
+pub fn set_last_timestamp(e: &Env, timestamp: u64) {
+    e.storage().instance().set(&LAST_TIMESTAMP_KEY, &timestamp);
+}
+
+// Load prices for a given timestamp
+pub fn get_prices(e: &Env, timestamp: u64) -> Option<Vec<i128>> {
+    //check if the timestamp is in the cache
+    let cache = load_price_records_cache(e);
+    if cache.is_some() {
+        //check the cache first
+        for (ts, prices) in cache.unwrap() {
+            if ts == timestamp {
+                return Some(prices);
+            }
+        }
+    }
+    //get the price from the temporary storage
+    e.storage().temporary().get(&timestamp)
+}
+
+// Update prices stored in the oracle
+pub fn store_prices(e: &Env, prices: &Vec<i128>, timestamp: u64) {
+    //get the last timestamp
+    let last_timestamp = get_last_timestamp(e);
+    //update the last timestamp
+    if timestamp > last_timestamp {
+        set_last_timestamp(e, timestamp);
+    }
+    //set the price
+    let temps_storage = e.storage().temporary();
+    temps_storage.set(&timestamp, prices);
+    //update cache
+    let cache_size = settings::get_cache_size(e);
+    if cache_size > 0 {
+        //if cache size is non-empty, store it in the instance
+        let mut cache = load_price_records_cache(e).unwrap_or(Vec::new(&e));
+        cache.push_front((timestamp, prices.clone()));
+        while cache.len() > cache_size {
+            cache.pop_back(); //remove the oldest record if cache size exceeded
+        }
+        //write cache entry
+        e.storage().instance().set(&CACHE_KEY, &cache);
+    }
+    //calculate TTL
+    let retention_period = settings::get_history_retention_period(e);
+    let ledgers_to_live = ((retention_period / 1000 / 5 + 1) * 2) as u32;
+    //bump if needed
+    if ledgers_to_live > 16 {
+        //16 ledgers is the minimum extension period
+        temps_storage.extend_ttl(&timestamp, ledgers_to_live, ledgers_to_live)
+    }
+    //if the protocol hasn't updated to the latest version yet
+    if !protocol::at_latest_protocol_version(e) {
+        store_price_v1(e, prices, timestamp, ledgers_to_live);
+    }
+}
+
+// Load requested number of price records with a price function callback
+pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
+    e: &Env,
+    get_price_fn: F,
+    mut records: u32,
+) -> Option<Vec<PriceData>> {
+    let mut timestamp = obtain_last_record_timestamp(e);
+    if timestamp == 0 {
+        return None;
+    }
+
+    let mut prices = Vec::new(e);
+    let resolution = settings::get_resolution(e) as u64;
+
+    //limit the number of returned records to 20
+    records = records.min(20);
+
+    while records > 0 {
+        //invoke price fetch callback for each record
+        if let Some(price) = get_price_fn(timestamp) {
+            prices.push_back(price);
+        }
+        if timestamp < resolution {
+            break;
+        }
+        //decrement remaining records counter in every iteration
+        records -= 1;
+        timestamp -= resolution;
+    }
+
+    if prices.is_empty() {
+        None
+    } else {
+        Some(prices)
+    }
+}
+
+// Calculate TWAP approximation from loaded price range
+pub fn calculate_twap<F: Fn(u64) -> Option<PriceData>>(
+    e: &Env,
+    get_price_fn: F,
+    records: u32,
+) -> Option<i128> {
+    let prices = load_prices(&e, get_price_fn, records)?;
+
+    if prices.len() != records {
+        return None;
+    }
+
+    let last_price_timestamp = prices.first()?.timestamp * 1000; //convert to milliseconds to match the timestamp format
+    let timeframe = settings::get_resolution(e) as u64;
+    let current_time = timestamps::ledger_timestamp(&e);
+
+    //check if the last price is too old
+    if last_price_timestamp + timeframe + 60 * 1000 < current_time {
+        return None;
+    }
+
+    let sum: i128 = prices.iter().map(|price_data| price_data.price).sum();
+    Some(sum / prices.len() as i128)
+}
+
+// Load prices for a pair of assets
+pub fn load_cross_price(
+    e: &Env,
+    asset_pair_indexes: (u32, u32),
+    timestamp: u64,
+    decimals: u32,
+) -> Option<PriceData> {
+    //get the asset indexes
+    let (base_asset, quote_asset) = asset_pair_indexes;
+    //check if the asset are the same
+    if base_asset == quote_asset {
+        return Some(normalize_price_data(10i128.pow(decimals), timestamp));
+    }
+    //get the price for base_asset
+    let base_asset_price = retrieve_asset_price_data(e, base_asset, timestamp)?;
+    //get the price for quote_asset
+    let quote_asset_price = retrieve_asset_price_data(e, quote_asset, timestamp)?;
+
+    //calculate the cross price
+    Some(normalize_price_data(
+        fixed_div_floor(base_asset_price.price, quote_asset_price.price, decimals),
+        timestamp,
+    ))
+}
+
+// Get cached records from the instance storage
+fn load_price_records_cache(e: &Env) -> Option<Vec<(u64, Vec<i128>)>> {
+    e.storage().instance().get(&CACHE_KEY)
+}
+
+// Update price in legacy format (deprecated)
+pub fn store_price_v1(e: &Env, updates: &Vec<i128>, timestamp: u64, ledgers_to_live: u32) {
+    //iterate over the updates
+    for (i, price) in updates.iter().enumerate() {
+        //ignore zero prices
+        if price == 0 {
+            continue;
+        }
+        let asset = i as u8;
+
+        //build key for price record
+        let data_key = format_price_key_v1(asset, timestamp);
+        //store new price
+        let temp_storage = e.storage().temporary();
+        temp_storage.set(&data_key, &price);
+        if ledgers_to_live > 16 {
+            //16 ledgers is the minimum extension period
+            temp_storage.extend_ttl(&data_key, ledgers_to_live, ledgers_to_live)
+        }
+    }
+}
+
+// Load price in legacy format (deprecated)
+pub fn get_price_v1(e: &Env, asset: u8, timestamp: u64) -> Option<i128> {
+    //load the price from temporary storage
+    e.storage()
+        .temporary()
+        .get(&format_price_key_v1(asset, timestamp))
+}
+
+// (deprecated)
+fn format_price_key_v1(asset: u8, timestamp: u64) -> u128 {
+    (timestamp as u128) << 64 | asset as u128
+}
+
+// Div+floor with a specified precision
+pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
+    if dividend <= 0 || divisor <= 0 {
+        panic!("invalid division arguments")
+    }
+    let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
+    let bshift = core::cmp::max(decimals - ashift, 0);
+
+    let mut vdividend = dividend;
+    let mut vdivisor = divisor;
+    if ashift > 0 {
+        vdividend *= 10_i128.pow(ashift);
+    }
+    if bshift > 0 {
+        vdivisor /= 10_i128.pow(bshift);
+    }
+    vdividend / vdivisor
+}

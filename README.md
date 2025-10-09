@@ -110,14 +110,14 @@ pub fn maintain_stable_coin_peg(env: Env, reflector_contract_id: Address, curren
 }
 ```
 
-
-## Building the Contracts
+## Building Contracts
 
 ### Prerequisites
 
-- Ensure you have Rust installed and set up on your local machine. [Follow the official guide here.](https://www.rust-lang.org/tools/install)
+- Ensure you have Rust installed and set up ([official installation guide](https://www.rust-lang.org/tools/install))
+- Install Stellar CLI ([CLI installation guide](https://developers.stellar.org/docs/tools/cli/install-cli))
 
-### Building the Price Oracle
+### Building Price Oracle
 
 1. Navigate to the directory of the contract:
 
@@ -127,5 +127,5 @@ pub fn maintain_stable_coin_peg(env: Env, reflector_contract_id: Address, curren
 
 2. Run the build command:
     ```bash
-    cargo build --release --target wasm32-unknown-unknown
+    stellar contract build 
     ```

@@ -2,24 +2,22 @@ use soroban_sdk::contracterror;
 
 #[contracterror]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-// The error codes for the contract.
+// Standard contract errors
 pub enum Error {
-    // The contract is already initialized.
+    // Contract already initialized
     AlreadyInitialized = 0,
-    // The caller is not authorized to perform the operation.
+    // Caller is not authorized to perform operation
     Unauthorized = 1,
-    // The config assets doen't contain persistent asset. Delete assets is not supported.
+    // Config asset list doesn't contain persistent asset
     AssetMissing = 2,
-    // The asset is already added to the contract's list of supported assets.
+    // Asset is already exists in supported assets list
     AssetAlreadyExists = 3,
-    // The config version is invalid
+    // Config version is invalid
     InvalidConfigVersion = 4,
-    // The prices timestamp is invalid
+    // Price timestamp is invalid
     InvalidTimestamp = 5,
-    // The assets update length or prices update length is invalid
-    InvalidUpdateLength = 6,
-    // The assets storage is full
-    AssetLimitExceeded = 7,
-    // The amount is invalid (e.g., negative or zero).
-    InvalidAmount = 8,
+    // Maximum assets limit reached
+    AssetLimitExceeded = 6,
+    // Amount is invalid (negative or zero).
+    InvalidAmount = 7,
 }
