@@ -23,17 +23,13 @@ pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
 
 // Retrieve price from record for specific asset
 pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<PriceData> {
-    //load price data for given timestamp
-    let prices = get_prices(e, timestamp);
     //if the protocol version is not current, use legacy method
     if !protocol::at_latest_protocol_version(e) {
         let price = get_price_v1(e, asset as u8, timestamp)?;
         return Some(normalize_price_data(price, timestamp));
     }
-    if prices.is_none() {
-        return None;
-    }
-    let prices = prices.as_ref().unwrap();
+    //load price data for given timestamp
+    let prices = get_prices(e, timestamp)?;
     if prices.len() <= asset {
         return None;
     }
