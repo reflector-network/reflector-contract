@@ -7,7 +7,7 @@ use shared::prices;
 use shared::types::{asset::Asset, fee_config::FeeConfig};
 use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{symbol_short, Address, Env, IntoVal, String, Symbol, TryIntoVal, Vec};
+use soroban_sdk::{log, symbol_short, Address, Env, IntoVal, String, Symbol, TryIntoVal, Vec};
 use std::panic::{self, AssertUnwindSafe};
 use alloc::string::ToString;
 
@@ -87,6 +87,28 @@ fn generate_assets(e: &Env, count: usize, start_index: u32) -> Vec<Asset> {
 fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
     let mut updates = Vec::new(&env);
     for _ in assets.iter() {
+        updates.push_back(price);
+    }
+    updates
+}
+
+fn get_random_bool() -> bool {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let random_bool = (nanos % 200) == 0;
+    random_bool
+}
+
+fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
+    let mut updates = Vec::new(&env);
+    for _ in assets.iter() {
+        let price = if get_random_bool() {
+            0
+        } else {
+            price
+        };
         updates.push_back(price);
     }
     updates
@@ -477,4 +499,56 @@ fn price_test() {
 fn charge_test(base_fee: u64, invocation: Invocation, rounds: u32, expected_fee: u64) {
     let fee = charge::calc_fee(base_fee, invocation, rounds);
     assert_eq!(fee, expected_fee);
+}
+
+#[test]
+fn set_price_prices() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let assets = init_data.assets;
+
+    client.set_cache_size(&256);
+
+    let mut history_prices = Vec::new(&env);
+
+    //set more than 255 prices to check history is overritten correctly
+    for i in 0..257 {
+        let timestamp = 600_000 + i * 300_000;
+
+        if timestamp != 900_000 && timestamp != 1200_000 {
+            let updates = get_updates_with_random(&env, &assets, normalize_price(100));
+            history_prices.push_front((timestamp, updates.clone()));
+            //set prices for assets
+            client.set_price(&updates, &timestamp);
+        } else {
+            //simulate time passage without setting prices to create gaps in updates
+            let updates = get_updates_with_random(&env, &assets, 0);
+            history_prices.push_front((timestamp, updates.clone()));
+        }
+        let ledger_info = env.ledger().get();
+        env.ledger().set(LedgerInfo {
+            timestamp: timestamp / 1000 + 300,
+            ..ledger_info
+        });
+    }
+
+    let caller = Address::generate(&env);
+
+    //verify prices
+    for (history_index, (timestamp, updates)) in history_prices.iter().enumerate() {
+        if history_index > 255 {
+            break;
+        }
+        for (asset_index, asset) in assets.iter().enumerate() {
+            let price_data = client.price(&caller, &asset, &(timestamp / 1000));
+            let expected_price = updates.get(asset_index as u32).unwrap_or_default();
+            if expected_price > 0 {
+                let price = price_data.unwrap();
+                assert_eq!(price.price, expected_price);
+                assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+            } else {
+                assert!(price_data.is_none());
+            }
+        }
+    }
 }

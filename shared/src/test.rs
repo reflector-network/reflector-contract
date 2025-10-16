@@ -2,6 +2,8 @@
 extern crate alloc;
 extern crate std;
 
+use soroban_sdk::{log, Bytes, Env, Vec};
+
 use super::*;
 use std::panic::{self, AssertUnwindSafe};
 
@@ -32,6 +34,68 @@ fn div_tests() {
             assert!(result.is_err());
         } else {
             assert_eq!(result.unwrap(), *expected);
+        }
+    }
+}
+
+
+#[test]
+fn pos_encoding_bitmask() {
+    let e = Env::default();
+    let mut mask = Bytes::new(&e);
+    let total_assets = 5;
+    let mut total_periods = 130;
+    for period in 0..total_periods {
+        let mut updates = Vec::new(&e);
+        for asset_index in 0..total_assets {
+            let price = match asset_index > 0 && (period % asset_index == 0) {
+                true => 1,
+                _ => 0,
+            };
+            updates.push_back(price);
+        }
+        mask = pos_encoding::update_position_mask(&e, mask, &updates);
+    }
+    log!(&e, "entire mask", mask);
+
+    //check previous prices
+    let period_diff = if total_periods > 255 {
+        total_periods - 255
+    } else {
+        0
+    };
+    total_periods = std::cmp::min(total_periods, 255);
+    for period in 0..total_periods {
+        let check_period = total_periods - period - 1;
+        for asset_index in 0..total_assets {
+            let expected = asset_index > 0 && ((period + period_diff) % asset_index == 0);
+            let found = pos_encoding::had_update(&mask, asset_index, check_period);
+            assert_eq!(found, expected);
+        }
+    }
+}
+
+#[test]
+fn update_record_bitmask() {
+    let e = Env::default();
+    let iterations = 70;
+
+    let mut updates = Vec::from_array(&e, [0i128;254]);
+    for i in 0..iterations {
+        for asset_index in 0..updates.len() {
+            let price = match i & asset_index == 0 {
+                true => 1,
+                _ => 0,
+            };
+            updates.set(asset_index, price);
+        }
+        let mask = pos_encoding::generate_update_record_mask(&e, &updates);
+        //log!(&e, "entire mask", mask);
+        for (asset_index, price) in updates.iter().enumerate() {
+            assert_eq!(
+                pos_encoding::check_update_record_mask(&mask, asset_index as u32),
+                price > 0
+            );
         }
     }
 }

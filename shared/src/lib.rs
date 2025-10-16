@@ -9,5 +9,6 @@ pub mod types;
 pub mod price_oracle;
 pub mod prices;
 pub mod protocol;
+pub mod pos_encoding;
 
 pub mod test;

@@ -1,11 +1,12 @@
+use crate::pos_encoding::{update_position_mask, had_update};
 use crate::{protocol, timestamps};
 use crate::types::price_data::PriceData;
 use crate::settings;
-use soroban_sdk::{Env, Vec};
+use soroban_sdk::{Bytes, Env, Vec};
 
 const CACHE_KEY: &str = "cache";
 const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
-const ASSET_TIMESTAMPS_KEY: &str = "asset_timestamps";
+const HISTORY_TIMESTAMPS_KEY: &str = "history_timestamps";
 
 // Get last known record timestamp
 pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
@@ -28,6 +29,19 @@ pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<
     if !protocol::at_latest_protocol_version(e) {
         let price = get_price_v1(e, asset as u8, timestamp)?;
         return Some(normalize_price_data(price, timestamp));
+    }
+    let last_timestamp = get_last_timestamp(e);
+    //get the timestamp index in the bitmask
+    if last_timestamp < timestamp {
+        return None;
+    }
+    let mut timestamp_index = 0;
+    if last_timestamp > timestamp {
+        timestamp_index = (last_timestamp - timestamp) / settings::get_resolution(e) as u64;
+    }
+    if timestamp_index > 255 || !has_price(e, asset, timestamp_index as u32) {
+        //we cannot track more than 256 updates in the bitmask
+        return None;
     }
     //load price data for given timestamp
     let prices = get_prices(e, timestamp)?;
@@ -62,48 +76,41 @@ pub fn set_last_timestamp(e: &Env, timestamp: u64) {
     e.storage().instance().set(&LAST_TIMESTAMP_KEY, &timestamp);
 }
 
-pub fn get_last_timestamps(e: &Env) -> Vec<Vec<bool>> {
-    e.storage().instance().get(&ASSET_TIMESTAMPS_KEY).unwrap_or_else(|| Vec::new(e))
+pub fn get_history_timestamps(e: &Env) -> Bytes {
+    e.storage().instance().get(&HISTORY_TIMESTAMPS_KEY).unwrap_or_else(|| Bytes::new(e))
 }
 
-const LIMIT: usize = 145;
-
-pub fn set_last_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
+pub fn set_history_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
     let last_timestamp = get_last_timestamp(e);
-    let mut timestamps = get_last_timestamps(e);
+    let mut timestamps = get_history_timestamps(e);
     let resolution = settings::get_resolution(e) as u64;
     //find the delta in updates
     let mut update_delta = 0;
     if last_timestamp > 0 && timestamp > last_timestamp {
         update_delta = (timestamp - last_timestamp) / resolution;
     }
-    //shift existing timestamps
-    for asset_index in 0..prices.len() {
-        let mut asset_timestamps = timestamps
-            .get(asset_index)
-            .unwrap_or_else(|| Vec::from_array(&e, [false; LIMIT]));
 
-        if update_delta > 1 {
-            //shift missing intervals
-            for _ in 1..update_delta {
-                asset_timestamps.push_front(false);
+    //add missing intervals
+    if update_delta > 1 {
+        for _ in 1..update_delta {
+            let mut empty_prices = Vec::new(e);
+            for _ in 0..prices.len() {
+                empty_prices.push_back(0i128);
             }
-        }
-        let has_update = prices
-            .get(asset_index as u32)
-            .unwrap_or_default() != 0;
-        asset_timestamps.push_front(has_update);
-        while asset_timestamps.len() > LIMIT as u32 {
-            asset_timestamps.pop_back();
-        }
-        //store back
-        if timestamps.len() == asset_index {
-            timestamps.push_back(asset_timestamps.clone());
-        } else {
-            timestamps.set(asset_index as u32, asset_timestamps.clone());
+            timestamps = update_position_mask(e, timestamps, &empty_prices);
         }
     }
-    e.storage().instance().set(&ASSET_TIMESTAMPS_KEY, &timestamps);
+
+    //update the position mask
+    timestamps = update_position_mask(e, timestamps, prices);
+
+    //store updated timestamps
+    e.storage().instance().set(&HISTORY_TIMESTAMPS_KEY, &timestamps);
+}
+
+pub fn has_price(e: &Env, asset_index: u32, periods_ago: u32) -> bool {
+    let timestamps = get_history_timestamps(e);
+    had_update(&timestamps, asset_index, periods_ago)
 }
 
 // Load prices for a given timestamp

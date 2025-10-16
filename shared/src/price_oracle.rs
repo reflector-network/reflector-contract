@@ -421,7 +421,7 @@ impl PriceOracleContractBase {
         //prepare and publish update event
         events::publish_update_event(e, &updates, timestamp);
         //store asset timestamps
-        prices::set_last_timestamps(e, &updates, timestamp);
+        prices::set_history_timestamps(e, &updates, timestamp);
         //store new prices
         prices::store_prices(e, &updates, timestamp);
     }

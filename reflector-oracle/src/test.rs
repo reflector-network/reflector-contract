@@ -21,6 +21,28 @@ fn convert_to_seconds(timestamp: u64) -> u64 {
     timestamp / 1000
 }
 
+fn get_random_bool() -> bool {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let random_bool = (nanos % 200) == 0;
+    random_bool
+}
+
+fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
+    let mut updates = Vec::new(&env);
+    for _ in assets.iter() {
+        let price = if get_random_bool() {
+            0
+        } else {
+            price
+        };
+        updates.push_back(price);
+    }
+    updates
+}
+
 fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
     let env = Env::default();
 
@@ -113,10 +135,10 @@ fn init_test() {
     assert_eq!(base, init_data.base_asset);
 
     let resolution = client.resolution();
-    assert_eq!(resolution, RESOLUTION / 1000);
+    assert_eq!(resolution, convert_to_seconds(RESOLUTION.into()) as u32);
 
     let period = client.history_retention_period().unwrap();
-    assert_eq!(period, init_data.history_retention_period / 1000);
+    assert_eq!(period, convert_to_seconds(init_data.history_retention_period));
 
     let decimals = client.decimals();
     assert_eq!(decimals, DECIMALS);
@@ -415,4 +437,56 @@ fn set_retention_config_test() {
 
     let fee_token_balance = TokenClient::new(&env, &fee_asset.address()).balance(&sponsor);
     assert_eq!(fee_token_balance, 0); //1 XRF token is left after paying the fee
+}
+
+
+
+#[test]
+fn set_price_prices() {
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let assets = init_data.assets;
+
+    client.set_cache_size(&256);
+
+    let mut history_prices = Vec::new(&env);
+
+    //set more than 255 prices to check history is overritten correctly
+    for i in 0..257 {
+        let timestamp = 600_000 + i * 300_000;
+
+        if timestamp != 900_000 && timestamp != 1200_000 {
+            let updates = get_updates_with_random(&env, &assets, normalize_price(100));
+            history_prices.push_front((timestamp, updates.clone()));
+            //set prices for assets
+            client.set_price(&updates, &timestamp);
+        } else {
+            //simulate time passage without setting prices to create gaps in updates
+            let updates = get_updates_with_random(&env, &assets, 0);
+            history_prices.push_front((timestamp, updates.clone()));
+        }
+        let ledger_info = env.ledger().get();
+        env.ledger().set(LedgerInfo {
+            timestamp: convert_to_seconds(timestamp) + 300,
+            ..ledger_info
+        });
+    }
+
+    //verify prices
+    for (history_index, (timestamp, updates)) in history_prices.iter().enumerate() {
+        if history_index > 255 {
+            break;
+        }
+        for (asset_index, asset) in assets.iter().enumerate() {
+            let price_data = client.price(&asset, &convert_to_seconds(timestamp));
+            let expected_price = updates.get(asset_index as u32).unwrap_or_default();
+            if expected_price > 0 {
+                let price = price_data.unwrap();
+                assert_eq!(price.price, expected_price);
+                assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+            } else {
+                assert!(price_data.is_none());
+            }
+        }
+    }
 }
