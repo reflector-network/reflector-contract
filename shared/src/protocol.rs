@@ -1,5 +1,8 @@
-use crate::{timestamps, CURRENT_PROTOCOL};
+use crate::{timestamps};
 use soroban_sdk::Env;
+
+//current protocol version
+pub const CURRENT_PROTOCOL: u32 = 2; 
 
 //storage keys
 const UPDATE_TS_KEY: &str = "protocol_update";

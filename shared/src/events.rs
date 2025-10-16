@@ -1,6 +1,13 @@
-use crate::types::{asset::Asset, error::Error};
-use crate::{assets, UpdateEvent};
-use soroban_sdk::{panic_with_error, Env, Vec};
+use crate::{assets, types::{asset::Asset, error::Error}};
+use soroban_sdk::{contractevent, panic_with_error, Env, Val, Vec};
+
+#[contractevent(topics = ["REFLECTOR", "update"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpdateEvent {
+    #[topic]
+    pub timestamp: u64,
+    pub update_data: Vec<(Val, i128)>,
+}
 
 // Compose and publish price update event
 #[inline]

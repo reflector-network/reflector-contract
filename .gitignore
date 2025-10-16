@@ -2,3 +2,6 @@
 /.soroban
 /target
 /test_snapshots
+/reflector-oracle/test_snapshots
+/reflector-oracle-plus/test_snapshots
+/shared/test_snapshots

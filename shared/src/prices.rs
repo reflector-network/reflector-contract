@@ -5,6 +5,7 @@ use soroban_sdk::{Env, Vec};
 
 const CACHE_KEY: &str = "cache";
 const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
+const ASSET_TIMESTAMPS_KEY: &str = "asset_timestamps";
 
 // Get last known record timestamp
 pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
@@ -59,6 +60,50 @@ pub fn get_last_timestamp(e: &Env) -> u64 {
 // Store last update timestamp
 pub fn set_last_timestamp(e: &Env, timestamp: u64) {
     e.storage().instance().set(&LAST_TIMESTAMP_KEY, &timestamp);
+}
+
+pub fn get_last_timestamps(e: &Env) -> Vec<Vec<bool>> {
+    e.storage().instance().get(&ASSET_TIMESTAMPS_KEY).unwrap_or_else(|| Vec::new(e))
+}
+
+const LIMIT: usize = 145;
+
+pub fn set_last_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
+    let last_timestamp = get_last_timestamp(e);
+    let mut timestamps = get_last_timestamps(e);
+    let resolution = settings::get_resolution(e) as u64;
+    //find the delta in updates
+    let mut update_delta = 0;
+    if last_timestamp > 0 && timestamp > last_timestamp {
+        update_delta = (timestamp - last_timestamp) / resolution;
+    }
+    //shift existing timestamps
+    for asset_index in 0..prices.len() {
+        let mut asset_timestamps = timestamps
+            .get(asset_index)
+            .unwrap_or_else(|| Vec::from_array(&e, [false; LIMIT]));
+
+        if update_delta > 1 {
+            //shift missing intervals
+            for _ in 1..update_delta {
+                asset_timestamps.push_front(false);
+            }
+        }
+        let has_update = prices
+            .get(asset_index as u32)
+            .unwrap_or_default() != 0;
+        asset_timestamps.push_front(has_update);
+        while asset_timestamps.len() > LIMIT as u32 {
+            asset_timestamps.pop_back();
+        }
+        //store back
+        if timestamps.len() == asset_index {
+            timestamps.push_back(asset_timestamps.clone());
+        } else {
+            timestamps.set(asset_index as u32, asset_timestamps.clone());
+        }
+    }
+    e.storage().instance().set(&ASSET_TIMESTAMPS_KEY, &timestamps);
 }
 
 // Load prices for a given timestamp

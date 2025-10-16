@@ -1,13 +1,8 @@
+use shared::types::{asset::Asset, fee_config::FeeConfig};
 use soroban_sdk::{contracttype, Address, Vec};
-
-use crate::types::retention_config::RetentionConfig;
-
-use super::asset::Asset;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-
-// Contract configuration parameters
 pub struct ConfigData {
     // Admin address
     pub admin: Address,
@@ -24,5 +19,7 @@ pub struct ConfigData {
     // Number of rounds held in instance cache
     pub cache_size: u32,
     // Contract retention config
-    pub retention_config: RetentionConfig,
+    pub retention_config: FeeConfig,
+    /// Invocation fee
+    pub invocation_config: FeeConfig
 }

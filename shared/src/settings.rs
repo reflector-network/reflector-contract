@@ -1,5 +1,5 @@
 use crate::types::{
-    asset::Asset, config_data::ConfigData, error::Error, retention_config::RetentionConfig,
+    asset::Asset, error::Error, fee_config::FeeConfig,
 };
 use soroban_sdk::{Address, Env};
 
@@ -10,23 +10,23 @@ const RESOLUTION_KEY: &str = "resolution";
 const RETENTION_KEY: &str = "retention";
 const CACHE_SIZE_KEY: &str = "cache_size";
 
-const XRF_TOKEN_ADDRESS: &str = "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LULV5TU35N2CIZA";
+pub const XRF_TOKEN_ADDRESS: &str = "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LULV5TU35N2CIZA";
 const DEFAULT_RETENTION_FEE: i128 = 100_000_000;
 
 #[inline]
-pub fn init(e: &Env, config: &ConfigData) {
+pub fn init(e: &Env, base: &Asset, decimals: u32, resolution: u32, history_retention_period: u64, cache_size: u32, retention_config: &FeeConfig) {
     //do not allow to initialize more than once
     if e.storage().instance().has(&RETENTION_PERIOD_KEY) {
         e.panic_with_error(Error::AlreadyInitialized);
     }
     let instance = e.storage().instance();
     //initialized only once and cannot be changed in the future
-    instance.set(&BASE_KEY, &config.base_asset);
-    instance.set(&DECIMALS_KEY, &config.decimals);
-    set_resolution(e, config.resolution);
-    set_history_retention_period(e, config.history_retention_period);
-    set_cache_size(e, config.cache_size);
-    set_retention_config(e, &config.retention_config);
+    instance.set(&BASE_KEY, base);
+    instance.set(&DECIMALS_KEY, &decimals);
+    set_resolution(e, resolution);
+    set_history_retention_period(e, history_retention_period);
+    set_cache_size(e, cache_size);
+    set_retention_config(e, retention_config);
 }
 
 #[inline]
@@ -75,19 +75,19 @@ pub fn set_cache_size(e: &Env, cache_size: u32) {
 }
 
 #[inline]
-pub fn set_retention_config(e: &Env, retention_config: &RetentionConfig) {
+pub fn set_retention_config(e: &Env, retention_config: &FeeConfig) {
     e.storage()
         .instance()
         .set(&RETENTION_KEY, &retention_config);
 }
 
 #[inline]
-pub fn get_retention_config(e: &Env) -> RetentionConfig {
+pub fn get_retention_config(e: &Env) -> FeeConfig {
     e.storage()
         .instance()
         .get(&RETENTION_KEY)
         .unwrap_or_else(|| {
-            RetentionConfig::Some((
+            FeeConfig::Some((
                 Address::from_str(e, XRF_TOKEN_ADDRESS),
                 DEFAULT_RETENTION_FEE,
             ))
