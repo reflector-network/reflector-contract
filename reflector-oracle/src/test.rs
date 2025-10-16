@@ -3,7 +3,9 @@ extern crate alloc;
 extern crate std;
 
 
+use shared::pos_encoding::generate_update_record_mask;
 use shared::prices;
+use shared::types::timestamp_prices::TimestampPrices;
 use shared::types::{asset::Asset, fee_config::FeeConfig};
 use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
@@ -21,6 +23,18 @@ fn convert_to_seconds(timestamp: u64) -> u64 {
     timestamp / 1000
 }
 
+fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> TimestampPrices {
+    let mut updates = Vec::new(&env);
+    for _ in assets.iter() {
+        updates.push_back(price);
+    }
+    let mask = generate_update_record_mask(env, &updates);
+    TimestampPrices {
+        prices: updates,
+        mask: mask,
+    }
+}
+
 fn get_random_bool() -> bool {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -30,7 +44,7 @@ fn get_random_bool() -> bool {
     random_bool
 }
 
-fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
+fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> TimestampPrices {
     let mut updates = Vec::new(&env);
     for _ in assets.iter() {
         let price = if get_random_bool() {
@@ -40,7 +54,11 @@ fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i
         };
         updates.push_back(price);
     }
-    updates
+    let mask = generate_update_record_mask(env, &updates);
+    TimestampPrices {
+        prices: updates,
+        mask: mask,
+    }
 }
 
 fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, ConfigData) {
@@ -101,14 +119,6 @@ fn generate_assets(e: &Env, count: usize, start_index: u32) -> Vec<Asset> {
         }
     }
     assets
-}
-
-fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> Vec<i128> {
-    let mut updates = Vec::new(&env);
-    for _ in assets.iter() {
-        updates.push_back(price);
-    }
-    updates
 }
 
 #[test]
@@ -311,7 +321,12 @@ fn prices_update_overflow_test() {
     for i in 1..=256 {
         updates.push_back(normalize_price(i as i128 + 1));
     }
-    client.set_price(&updates, &600_000);
+    let mask = generate_update_record_mask(&env, &updates);
+    let update = TimestampPrices {
+        prices: updates,
+        mask: mask,
+    };
+    client.set_price(&update, &600_000);
 }
 
 #[test]
@@ -439,10 +454,8 @@ fn set_retention_config_test() {
     assert_eq!(fee_token_balance, 0); //1 XRF token is left after paying the fee
 }
 
-
-
 #[test]
-fn set_price_prices() {
+fn prices_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
     let assets = init_data.assets;
@@ -467,26 +480,33 @@ fn set_price_prices() {
         }
         let ledger_info = env.ledger().get();
         env.ledger().set(LedgerInfo {
-            timestamp: convert_to_seconds(timestamp) + 300,
+            timestamp: timestamp / 1000 + 300,
             ..ledger_info
         });
     }
 
+    let mut had_gaps = false;
+    let mut had_prices = false;
     //verify prices
     for (history_index, (timestamp, updates)) in history_prices.iter().enumerate() {
         if history_index > 255 {
             break;
         }
+        let all_prices = prices::get_prices_for_assets(&env, &updates, assets.len() + 10 as u32); //+10 to check that out of range assets are ignored
         for (asset_index, asset) in assets.iter().enumerate() {
-            let price_data = client.price(&asset, &convert_to_seconds(timestamp));
-            let expected_price = updates.get(asset_index as u32).unwrap_or_default();
+            let price_data = client.price(&asset, &(timestamp / 1000));
+            let expected_price = all_prices.get(asset_index as u32).unwrap_or_default();
             if expected_price > 0 {
                 let price = price_data.unwrap();
                 assert_eq!(price.price, expected_price);
                 assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+                had_prices = true;
             } else {
                 assert!(price_data.is_none());
+                had_gaps = true;
             }
         }
     }
+    assert!(had_prices);
+    assert!(had_gaps);
 }

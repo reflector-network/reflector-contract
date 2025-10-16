@@ -1,5 +1,5 @@
 use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec};
-use crate::{assets, auth, events, prices, protocol, settings, timestamps, types::{asset::Asset, error::Error, fee_config::FeeConfig, price_data::PriceData}};
+use crate::{assets, auth, events, prices, protocol, settings, timestamps, types::{asset::Asset, error::Error, fee_config::FeeConfig, price_data::PriceData, timestamp_prices::TimestampPrices}};
 
 pub struct PriceOracleContractBase;
 
@@ -408,9 +408,9 @@ impl PriceOracleContractBase {
     // # Panics
     //
     // Panics if not authorized or price snapshot record is invalid
-    pub fn set_price(e: &Env, updates: Vec<i128>, timestamp: u64) {
+    pub fn set_price(e: &Env, update: TimestampPrices, timestamp: u64) {
         auth::panic_if_not_admin(e);
-        if updates.len() == 0 {
+        if update.prices.len() == 0 {
             return; //skip empty updates
         }
         //validate record timestamp
@@ -418,12 +418,14 @@ impl PriceOracleContractBase {
         if timestamp == 0 || !timestamps::is_valid(e, timestamp) || timestamp > ledger_timestamp {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
+        //create vector of all assets prices
+        let asset_prices = prices::get_prices_for_assets(e, &update, assets::load_all_assets(e).len());
+        //store history timestamps for all assets
+        prices::set_history_timestamps(e, &asset_prices, timestamp);
         //prepare and publish update event
-        events::publish_update_event(e, &updates, timestamp);
-        //store asset timestamps
-        prices::set_history_timestamps(e, &updates, timestamp);
+        events::publish_update_event(e, &asset_prices, timestamp);
         //store new prices
-        prices::store_prices(e, &updates, timestamp);
+        prices::store_prices(e, &update, timestamp, &asset_prices);
     }
 
     // Update contract source code

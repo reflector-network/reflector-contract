@@ -5,7 +5,7 @@ mod settings;
 mod types;
 mod charge;
 
-use shared::{price_oracle::PriceOracleContractBase, types::{asset::Asset, fee_config::FeeConfig, price_data::PriceData}};
+use shared::{price_oracle::PriceOracleContractBase, types::{asset::Asset, fee_config::FeeConfig, price_data::PriceData, timestamp_prices::TimestampPrices}};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 use crate::types::{config_data::ConfigData, invocation::Invocation};
@@ -396,7 +396,7 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if not authorized or price snapshot record is invalid
-    pub fn set_price(e: &Env, updates: Vec<i128>, timestamp: u64) {
+    pub fn set_price(e: &Env, updates: TimestampPrices, timestamp: u64) {
         PriceOracleContractBase::set_price(e, updates, timestamp);
     }
 
