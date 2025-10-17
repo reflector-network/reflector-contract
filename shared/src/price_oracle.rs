@@ -413,6 +413,9 @@ impl PriceOracleContractBase {
         if update.prices.len() == 0 {
             return; //skip empty updates
         }
+        if update.prices.len() > assets::load_all_assets(e).len() {
+            panic_with_error!(&e, Error::InvalidPricesUpdate);
+        }
         //validate record timestamp
         let ledger_timestamp = timestamps::ledger_timestamp(&e);
         if timestamp == 0 || !timestamps::is_valid(e, timestamp) || timestamp > ledger_timestamp {

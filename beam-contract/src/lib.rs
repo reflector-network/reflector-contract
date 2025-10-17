@@ -168,6 +168,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `asset` - Asset to quote
     //
     // # Returns
@@ -183,6 +184,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `asset` - Asset to quote
     // * `records` - Number of records to return
     //
@@ -199,6 +201,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     //
@@ -215,6 +218,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     // * `timestamp` - Timestamp
@@ -238,6 +242,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     // * `records` - Number of records to fetch
@@ -261,6 +266,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `asset` - Asset to quote
     // * `records` - Number of records to process
     //
@@ -277,6 +283,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
+    // * `caller` - Address of the caller
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     // * `records` - Number of records to process

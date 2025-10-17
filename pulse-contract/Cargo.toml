@@ -1,5 +1,5 @@
 [package]
-name = "reflector-oracle"
+name = "pulse-contract"
 version = "6.0.0"
 edition = "2021"
 

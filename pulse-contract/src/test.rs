@@ -2,14 +2,12 @@
 extern crate alloc;
 extern crate std;
 
-
-use shared::pos_encoding::generate_update_record_mask;
 use shared::prices;
 use shared::types::timestamp_prices::TimestampPrices;
 use shared::types::{asset::Asset, fee_config::FeeConfig};
 use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{symbol_short, Address, Env, IntoVal, String, Symbol, TryIntoVal, Vec};
+use soroban_sdk::{symbol_short, Address, Bytes, Env, IntoVal, String, Symbol, TryIntoVal, Vec};
 use std::panic::{self, AssertUnwindSafe};
 use alloc::string::ToString;
 
@@ -21,6 +19,19 @@ const DECIMALS: u32 = 14;
 
 fn convert_to_seconds(timestamp: u64) -> u64 {
     timestamp / 1000
+}
+
+fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
+    let mut mask = [0u8; 32];
+    for (asset_index, price) in updates.iter().enumerate() {
+        if price > 0 {
+            let (byte, bitmask) = shared::pos_encoding::locate_update_record_mask_position(asset_index as u32);
+            let i = byte as usize;
+            let bytemask = mask[i] | bitmask;
+            mask[i] = bytemask
+        }
+    }
+    Bytes::from_array(e, &mask)
 }
 
 fn get_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> TimestampPrices {

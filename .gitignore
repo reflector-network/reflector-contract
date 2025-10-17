@@ -2,6 +2,6 @@
 /.soroban
 /target
 /test_snapshots
-/reflector-oracle/test_snapshots
-/reflector-oracle-plus/test_snapshots
+/beam-contract/test_snapshots
+/pulse-contract/test_snapshots
 /shared/test_snapshots

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["shared", "reflector-oracle", "reflector-oracle-plus"]
+members = ["shared", "pulse-contract", "beam-contract"]
 
 [profile.release-with-logs]
 inherits = "release"
@@ -18,4 +18,4 @@ codegen-units = 1
 lto = true
 
 [workspace.dependencies.soroban-sdk]
-version = "23.0.2"
+version = "23.0.3"

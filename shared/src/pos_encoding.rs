@@ -39,23 +39,10 @@ pub fn had_update(mask: &Bytes, asset_index: u32, period: u32) -> bool {
 }
 
 #[inline]
-fn locate_update_record_mask_position(asset_index: u32) -> (u32, u8) {
+pub fn locate_update_record_mask_position(asset_index: u32) -> (u32, u8) {
     let byte = asset_index / 8;
     let bitmask = 1 << (asset_index % 8);
     (byte, bitmask)
-}
-
-pub fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
-    let mut mask = [0u8; 32];
-    for (asset_index, price) in updates.iter().enumerate() {
-        if price > 0 {
-            let (byte, bitmask) = locate_update_record_mask_position(asset_index as u32);
-            let i = byte as usize;
-            let bytemask = mask[i] | bitmask;
-            mask[i] = bytemask
-        }
-    }
-    Bytes::from_array(e, &mask)
 }
 
 pub fn check_update_record_mask(mask: &Bytes, asset_index: u32) -> bool {

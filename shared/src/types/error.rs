@@ -20,4 +20,6 @@ pub enum Error {
     AssetLimitExceeded = 6,
     // Amount is invalid (negative or zero).
     InvalidAmount = 7,
+    // Prices update is invalid
+    InvalidPricesUpdate = 8,
 }

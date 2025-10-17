@@ -1,5 +1,5 @@
 [package]
-name = "reflector-oracle-plus"
+name = "beam-contract"
 version = "6.0.0"
 edition = "2021"
 

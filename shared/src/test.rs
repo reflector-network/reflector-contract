@@ -7,6 +7,19 @@ use soroban_sdk::{log, Bytes, Env, Vec};
 use super::*;
 use std::panic::{self, AssertUnwindSafe};
 
+fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
+    let mut mask = [0u8; 32];
+    for (asset_index, price) in updates.iter().enumerate() {
+        if price > 0 {
+            let (byte, bitmask) = pos_encoding::locate_update_record_mask_position(asset_index as u32);
+            let i = byte as usize;
+            let bytemask = mask[i] | bitmask;
+            mask[i] = bytemask
+        }
+    }
+    Bytes::from_array(e, &mask)
+}
+
 #[test]
 fn div_tests() {
     let test_cases = [
@@ -89,7 +102,7 @@ fn update_record_bitmask() {
             };
             updates.set(asset_index, price);
         }
-        let mask = pos_encoding::generate_update_record_mask(&e, &updates);
+        let mask = generate_update_record_mask(&e, &updates);
         //log!(&e, "entire mask", mask);
         for (asset_index, price) in updates.iter().enumerate() {
             assert_eq!(
