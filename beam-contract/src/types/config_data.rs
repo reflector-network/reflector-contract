@@ -21,5 +21,5 @@ pub struct ConfigData {
     // Contract retention config
     pub retention_config: FeeConfig,
     /// Invocation fee
-    pub invocation_config: FeeConfig
+    pub invocation_config: FeeConfig,
 }

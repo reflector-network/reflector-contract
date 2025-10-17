@@ -1,6 +1,4 @@
-use crate::types::{
-    asset::Asset, error::Error, fee_config::FeeConfig,
-};
+use crate::types::{asset::Asset, error::Error, fee_config::FeeConfig};
 use soroban_sdk::{Address, Env};
 
 const RETENTION_PERIOD_KEY: &str = "period";
@@ -14,7 +12,15 @@ pub const XRF_TOKEN_ADDRESS: &str = "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LU
 const DEFAULT_RETENTION_FEE: i128 = 100_000_000;
 
 #[inline]
-pub fn init(e: &Env, base: &Asset, decimals: u32, resolution: u32, history_retention_period: u64, cache_size: u32, retention_config: &FeeConfig) {
+pub fn init(
+    e: &Env,
+    base: &Asset,
+    decimals: u32,
+    resolution: u32,
+    history_retention_period: u64,
+    cache_size: u32,
+    retention_config: &FeeConfig,
+) {
     //do not allow to initialize more than once
     if e.storage().instance().has(&RETENTION_PERIOD_KEY) {
         e.panic_with_error(Error::AlreadyInitialized);

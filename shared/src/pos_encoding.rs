@@ -30,7 +30,6 @@ pub fn update_position_mask(e: &Env, mut mask: Bytes, updates: &Vec<i128>) -> By
     mask
 }
 
-
 pub fn had_update(mask: &Bytes, asset_index: u32, period: u32) -> bool {
     let from = asset_index * RECORD_SIZE + (RECORD_SIZE - 1 - period / 8);
     let bit = 1 << (period % 8);

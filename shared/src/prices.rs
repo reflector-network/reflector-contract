@@ -1,7 +1,7 @@
 use crate::pos_encoding;
-use crate::types::{timestamp_prices::TimestampPrices, price_data::PriceData};
-use crate::{protocol, timestamps};
 use crate::settings;
+use crate::types::{price_data::PriceData, timestamp_prices::TimestampPrices};
+use crate::{protocol, timestamps};
 use soroban_sdk::{Bytes, Env, Vec};
 
 const CACHE_KEY: &str = "cache";
@@ -53,13 +53,16 @@ pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<
     //load the prices for the timestamp
     let timestamp_prices = timestamp_prices(e, timestamp)?;
     //get price for the asset index
-    let price = get_prices_for_assets(e, &timestamp_prices, asset + 1)
-        .last()?; // as we requested asset+1, the last one is the requested asset
+    let price = get_prices_for_assets(e, &timestamp_prices, asset + 1).last()?; // as we requested asset+1, the last one is the requested asset
     Some(normalize_price_data(price, timestamp))
 }
 
 // Extract prices for all assets from the update record by the assets length
-pub fn get_prices_for_assets(e: &Env, timestamp_prices: &TimestampPrices, assets_length: u32) -> Vec<i128> {
+pub fn get_prices_for_assets(
+    e: &Env,
+    timestamp_prices: &TimestampPrices,
+    assets_length: u32,
+) -> Vec<i128> {
     //normalize prices for internal processing
     let mut normalized_vector_prices = Vec::new(&e);
     let mut last_price_index = 0;
@@ -90,7 +93,10 @@ pub fn set_last_timestamp(e: &Env, timestamp: u64) {
 }
 
 pub fn get_history_timestamps(e: &Env) -> Bytes {
-    e.storage().instance().get(&HISTORY_TIMESTAMPS_KEY).unwrap_or_else(|| Bytes::new(e))
+    e.storage()
+        .instance()
+        .get(&HISTORY_TIMESTAMPS_KEY)
+        .unwrap_or_else(|| Bytes::new(e))
 }
 
 pub fn set_history_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
@@ -118,7 +124,9 @@ pub fn set_history_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
     timestamps = pos_encoding::update_position_mask(e, timestamps, prices);
 
     //store updated timestamps
-    e.storage().instance().set(&HISTORY_TIMESTAMPS_KEY, &timestamps);
+    e.storage()
+        .instance()
+        .set(&HISTORY_TIMESTAMPS_KEY, &timestamps);
 }
 
 pub fn has_price(e: &Env, asset_index: u32, periods_ago: u32) -> bool {

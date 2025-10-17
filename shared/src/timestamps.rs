@@ -1,7 +1,7 @@
-use soroban_sdk::Env;
 use crate::settings;
+use soroban_sdk::Env;
 
-// Normalize timestamp trimming it to the timeframe resolution defined in settings 
+// Normalize timestamp trimming it to the timeframe resolution defined in settings
 pub fn normalize(e: &Env, value: u64) -> u64 {
     let timeframe = settings::get_resolution(e) as u64;
     if value == 0 || timeframe == 0 {

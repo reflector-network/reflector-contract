@@ -2,6 +2,7 @@
 extern crate alloc;
 extern crate std;
 
+use alloc::string::ToString;
 use shared::prices;
 use shared::types::timestamp_prices::TimestampPrices;
 use shared::types::{asset::Asset, fee_config::FeeConfig};
@@ -9,7 +10,6 @@ use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth,
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{symbol_short, Address, Bytes, Env, IntoVal, String, Symbol, TryIntoVal, Vec};
 use std::panic::{self, AssertUnwindSafe};
-use alloc::string::ToString;
 
 use crate::types::config_data::ConfigData;
 use crate::{PriceOracleContract, PriceOracleContractClient};
@@ -25,7 +25,8 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
     for (asset_index, price) in updates.iter().enumerate() {
         if price > 0 {
-            let (byte, bitmask) = shared::pos_encoding::locate_update_record_mask_position(asset_index as u32);
+            let (byte, bitmask) =
+                shared::pos_encoding::locate_update_record_mask_position(asset_index as u32);
             let i = byte as usize;
             let bytemask = mask[i] | bitmask;
             mask[i] = bytemask
@@ -58,11 +59,7 @@ fn get_random_bool() -> bool {
 fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> TimestampPrices {
     let mut updates = Vec::new(&env);
     for _ in assets.iter() {
-        let price = if get_random_bool() {
-            0
-        } else {
-            price
-        };
+        let price = if get_random_bool() { 0 } else { price };
         updates.push_back(price);
     }
     let mask = generate_update_record_mask(env, &updates);
@@ -102,7 +99,7 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         decimals: 14,
         resolution: RESOLUTION,
         cache_size: 0,
-        retention_config: FeeConfig::None
+        retention_config: FeeConfig::None,
     };
 
     env.mock_all_auths();
@@ -159,7 +156,10 @@ fn init_test() {
     assert_eq!(resolution, convert_to_seconds(RESOLUTION.into()) as u32);
 
     let period = client.history_retention_period().unwrap();
-    assert_eq!(period, convert_to_seconds(init_data.history_retention_period));
+    assert_eq!(
+        period,
+        convert_to_seconds(init_data.history_retention_period)
+    );
 
     let decimals = client.decimals();
     assert_eq!(decimals, DECIMALS);

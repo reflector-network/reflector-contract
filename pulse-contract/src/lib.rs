@@ -5,17 +5,22 @@ mod types;
 
 use crate::types::config_data::ConfigData;
 
-use shared::{price_oracle::PriceOracleContractBase, types::{asset::Asset, fee_config::FeeConfig, price_data::PriceData, timestamp_prices::TimestampPrices}};
+use shared::{
+    price_oracle::PriceOracleContractBase,
+    types::{
+        asset::Asset, fee_config::FeeConfig, price_data::PriceData,
+        timestamp_prices::TimestampPrices,
+    },
+};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 const INITIAL_EXPIRATION_PERIOD: u32 = 180; //6 months
 
 #[contract]
-pub struct  PriceOracleContract;
+pub struct PriceOracleContract;
 
 #[contractimpl]
 impl PriceOracleContract {
-    
     // Return base asset price is reported in
     //
     // # Returns
@@ -117,7 +122,13 @@ impl PriceOracleContract {
     //
     // Panics if the asset is not supported or if retention config is malformed/missing
     pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
-        PriceOracleContractBase::extend_asset_ttl(e, sponsor, asset, amount, INITIAL_EXPIRATION_PERIOD);
+        PriceOracleContractBase::extend_asset_ttl(
+            e,
+            sponsor,
+            asset,
+            amount,
+            INITIAL_EXPIRATION_PERIOD,
+        );
     }
 
     // Return the fee token address daily price feed retainer fee amount
@@ -137,7 +148,7 @@ impl PriceOracleContract {
     pub fn admin(e: &Env) -> Option<Address> {
         PriceOracleContractBase::admin(e)
     }
-    
+
     // Returns price  for an asset at specific timestamp
     //
     // # Arguments
@@ -274,16 +285,17 @@ impl PriceOracleContract {
     //
     // Panics if not authorized or if contract is already initialized
     pub fn config(e: &Env, config: ConfigData) {
-        PriceOracleContractBase::config(e, 
-            &config.admin, 
-            &config.base_asset, 
-            config.decimals, 
-            config.resolution, 
-            config.history_retention_period, 
-            config.cache_size, 
-            &config.retention_config, 
+        PriceOracleContractBase::config(
+            e,
+            &config.admin,
+            &config.base_asset,
+            config.decimals,
+            config.resolution,
+            config.history_retention_period,
+            config.cache_size,
+            &config.retention_config,
             config.assets,
-            INITIAL_EXPIRATION_PERIOD
+            INITIAL_EXPIRATION_PERIOD,
         );
     }
 
@@ -340,7 +352,11 @@ impl PriceOracleContract {
     //
     // Panics if not authorized or not initialized yet
     pub fn set_retention_config(e: &Env, retention_config: FeeConfig) {
-        PriceOracleContractBase::set_retention_config(e, retention_config, INITIAL_EXPIRATION_PERIOD);
+        PriceOracleContractBase::set_retention_config(
+            e,
+            retention_config,
+            INITIAL_EXPIRATION_PERIOD,
+        );
     }
 
     // Record new price feed history snapshot

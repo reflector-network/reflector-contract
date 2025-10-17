@@ -12,11 +12,7 @@ fn mul_scaled(value: u64, koef: u64) -> u64 {
     value * koef / SCALE
 }
 
-pub fn calc_fee(
-    base_fee: u64,
-    invocation: Invocation,
-    rounds: u32,
-) -> u64 {
+pub fn calc_fee(base_fee: u64, invocation: Invocation, rounds: u32) -> u64 {
     let mut koef = 1_000_000;
     match invocation {
         Invocation::Price => {}
@@ -37,12 +33,7 @@ pub fn calc_fee(
     fee
 }
 
-pub fn charge_fee(
-    e: &Env,
-    caller: &Address,
-    invocation: Invocation,
-    rounds: u32,
-) {
+pub fn charge_fee(e: &Env, caller: &Address, invocation: Invocation, rounds: u32) {
     let fee_config = settings::get_invocation_config(e);
     match fee_config {
         FeeConfig::None => return,
@@ -50,6 +41,6 @@ pub fn charge_fee(
             let fee = calc_fee(base_fee as u64, invocation, rounds) as i128;
             let token = soroban_sdk::token::Client::new(e, &fee_token);
             token.transfer(caller, &e.current_contract_address(), &fee);
-        },
+        }
     }
 }

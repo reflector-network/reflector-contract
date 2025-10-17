@@ -6,9 +6,7 @@ const DEFAULT_INVOCATION_FEE: i128 = 100_000_000;
 
 #[inline]
 pub fn set_invocation_config(e: &Env, inv_config: &FeeConfig) {
-    e.storage()
-        .instance()
-        .set(&INVOCATION_KEY, &inv_config);
+    e.storage().instance().set(&INVOCATION_KEY, &inv_config);
 }
 
 #[inline]

@@ -11,7 +11,8 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
     for (asset_index, price) in updates.iter().enumerate() {
         if price > 0 {
-            let (byte, bitmask) = pos_encoding::locate_update_record_mask_position(asset_index as u32);
+            let (byte, bitmask) =
+                pos_encoding::locate_update_record_mask_position(asset_index as u32);
             let i = byte as usize;
             let bytemask = mask[i] | bitmask;
             mask[i] = bytemask
@@ -50,7 +51,6 @@ fn div_tests() {
         }
     }
 }
-
 
 #[test]
 fn pos_encoding_bitmask() {
@@ -93,7 +93,7 @@ fn update_record_bitmask() {
     let e = Env::default();
     let iterations = 70;
 
-    let mut updates = Vec::from_array(&e, [0i128;254]);
+    let mut updates = Vec::from_array(&e, [0i128; 254]);
     for i in 0..iterations {
         for asset_index in 0..updates.len() {
             let price = match i & asset_index == 0 {

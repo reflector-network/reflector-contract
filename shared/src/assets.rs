@@ -106,7 +106,13 @@ pub fn init_expiration_config(e: &Env, initial_expiration_period: u32) {
 }
 
 // Extend time-to-live for given asset price feed
-pub fn extend_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128, initial_expiration_period: u32) {
+pub fn extend_ttl(
+    e: &Env,
+    sponsor: Address,
+    asset: Asset,
+    amount: i128,
+    initial_expiration_period: u32,
+) {
     //check if the amount is valid
     if amount <= 0 {
         e.panic_with_error(Error::InvalidAmount);

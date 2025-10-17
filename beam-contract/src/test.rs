@@ -2,6 +2,7 @@
 extern crate alloc;
 extern crate std;
 
+use alloc::string::ToString;
 use shared::prices;
 use shared::types::timestamp_prices::TimestampPrices;
 use shared::types::{asset::Asset, fee_config::FeeConfig};
@@ -9,10 +10,9 @@ use soroban_sdk::testutils::{Address as _, Events, Ledger, LedgerInfo, MockAuth,
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{symbol_short, Address, Bytes, Env, IntoVal, String, Symbol, TryIntoVal, Vec};
 use std::panic::{self, AssertUnwindSafe};
-use alloc::string::ToString;
 
-use crate::types::{config_data::ConfigData, invocation::Invocation};
 use crate::charge;
+use crate::types::{config_data::ConfigData, invocation::Invocation};
 use crate::{PriceOracleContract, PriceOracleContractClient};
 use test_case::test_case;
 
@@ -27,7 +27,8 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
     for (asset_index, price) in updates.iter().enumerate() {
         if price > 0 {
-            let (byte, bitmask) = shared::pos_encoding::locate_update_record_mask_position(asset_index as u32);
+            let (byte, bitmask) =
+                shared::pos_encoding::locate_update_record_mask_position(asset_index as u32);
             let i = byte as usize;
             let bytemask = mask[i] | bitmask;
             mask[i] = bytemask
@@ -67,7 +68,7 @@ fn init_contract_with_admin<'a>() -> (Env, PriceOracleContractClient<'a>, Config
         resolution: RESOLUTION,
         cache_size: 0,
         retention_config: FeeConfig::None,
-        invocation_config: FeeConfig::None
+        invocation_config: FeeConfig::None,
     };
 
     env.mock_all_auths();
@@ -121,11 +122,7 @@ fn get_random_bool() -> bool {
 fn get_updates_with_random(env: &Env, assets: &Vec<Asset>, price: i128) -> TimestampPrices {
     let mut updates = Vec::new(&env);
     for _ in assets.iter() {
-        let price = if get_random_bool() {
-            0
-        } else {
-            price
-        };
+        let price = if get_random_bool() { 0 } else { price };
         updates.push_back(price);
     }
     let mask = generate_update_record_mask(env, &updates);
@@ -464,7 +461,10 @@ fn set_retention_config_test() {
     assert_eq!(symbol_expires, 0);
     client.extend_asset_ttl(&sponsor, &asset, &10);
     let ledger_ts = env.ledger().timestamp() * 1000;
-    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + ledger_ts + 123428571); //initial ttl is 0, so ledger + 123428571 (ms you get for 10 XRF tokens) is expected
+    assert_eq!(
+        client.expires(&asset).unwrap(),
+        symbol_expires + ledger_ts + 123428571
+    ); //initial ttl is 0, so ledger + 123428571 (ms you get for 10 XRF tokens) is expected
 
     let fee_token_balance = TokenClient::new(&env, &fee_asset.address()).balance(&sponsor);
     assert_eq!(fee_token_balance, 0);
@@ -497,8 +497,10 @@ fn price_test() {
 
     //set prices for assets
     client.set_price(&updates, &timestamp);
-    
-    let fee_asset = env.register_stellar_asset_contract_v2(init_data.admin.clone()).address();
+
+    let fee_asset = env
+        .register_stellar_asset_contract_v2(init_data.admin.clone())
+        .address();
     let invocation_config = FeeConfig::Some((fee_asset.clone(), 1_000_000));
     client.set_invocation_config(&invocation_config);
 
@@ -507,7 +509,9 @@ fn price_test() {
     let fee_token = StellarAssetClient::new(&env, &fee_asset);
     fee_token.mint(&caller, &1_000_000);
     //get price for the first asset
-    let price = client.lastprice(&caller, &init_data.assets.first_unchecked()).unwrap();
+    let price = client
+        .lastprice(&caller, &init_data.assets.first_unchecked())
+        .unwrap();
     assert_eq!(price.price, normalize_price(100));
     assert_eq!(price.timestamp, convert_to_seconds(timestamp));
 

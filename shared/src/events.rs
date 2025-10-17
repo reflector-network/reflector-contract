@@ -1,4 +1,7 @@
-use crate::{assets, types::{asset::Asset, error::Error}};
+use crate::{
+    assets,
+    types::{asset::Asset, error::Error},
+};
 use soroban_sdk::{contractevent, panic_with_error, Env, Val, Vec};
 
 #[contractevent(topics = ["REFLECTOR", "update"])]

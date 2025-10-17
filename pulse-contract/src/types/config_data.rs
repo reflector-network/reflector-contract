@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Vec};
 use shared::types::{asset::Asset, fee_config::FeeConfig};
+use soroban_sdk::{contracttype, Address, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,5 +21,5 @@ pub struct ConfigData {
     // Number of rounds held in instance cache
     pub cache_size: u32,
     // Contract retention config
-    pub retention_config: FeeConfig
+    pub retention_config: FeeConfig,
 }

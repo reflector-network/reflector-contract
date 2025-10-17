@@ -5,5 +5,5 @@ use soroban_sdk::{contracttype, Address};
 // Oracle retention config containing fee asset and daily retention fee amount
 pub enum FeeConfig {
     Some((Address, i128)),
-    None
+    None,
 }

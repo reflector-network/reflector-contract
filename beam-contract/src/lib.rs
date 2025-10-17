@@ -1,21 +1,26 @@
 #![no_std]
 
-mod test;
-mod settings;
-mod types;
 mod charge;
+mod settings;
+mod test;
+mod types;
 
-use shared::{price_oracle::PriceOracleContractBase, types::{asset::Asset, fee_config::FeeConfig, price_data::PriceData, timestamp_prices::TimestampPrices}};
+use shared::{
+    price_oracle::PriceOracleContractBase,
+    types::{
+        asset::Asset, fee_config::FeeConfig, price_data::PriceData,
+        timestamp_prices::TimestampPrices,
+    },
+};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 use crate::types::{config_data::ConfigData, invocation::Invocation};
 
 #[contract]
-pub struct  PriceOracleContract;
+pub struct PriceOracleContract;
 
 #[contractimpl]
 impl PriceOracleContract {
-    
     // Return base asset price is reported in
     //
     // # Returns
@@ -146,7 +151,7 @@ impl PriceOracleContract {
     pub fn admin(e: &Env) -> Option<Address> {
         PriceOracleContractBase::admin(e)
     }
-    
+
     // Returns price  for an asset at specific timestamp
     //
     // # Arguments
@@ -208,7 +213,12 @@ impl PriceOracleContract {
     // # Returns
     //
     // Recent cross price (base_asset_price/quote_asset_price) for given assets or None if there were no records found
-    pub fn x_last_price(e: &Env, caller: Address, base_asset: Asset, quote_asset: Asset) -> Option<PriceData> {
+    pub fn x_last_price(
+        e: &Env,
+        caller: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
+    ) -> Option<PriceData> {
         caller.require_auth();
         charge::charge_fee(e, &caller, Invocation::CrossPrice, 1);
         PriceOracleContractBase::x_last_price(e, base_asset, quote_asset)
@@ -291,7 +301,13 @@ impl PriceOracleContract {
     // # Returns
     //
     // TWAP (base_asset_price/quote_asset_price) or None if assets are not supported
-    pub fn x_twap(e: &Env, caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128> {
+    pub fn x_twap(
+        e: &Env,
+        caller: Address,
+        base_asset: Asset,
+        quote_asset: Asset,
+        records: u32,
+    ) -> Option<i128> {
         caller.require_auth();
         charge::charge_fee(e, &caller, Invocation::CrossTwap, records);
         PriceOracleContractBase::x_twap(e, base_asset, quote_asset, records)
@@ -309,16 +325,17 @@ impl PriceOracleContract {
     //
     // Panics if not authorized or if contract is already initialized
     pub fn config(e: &Env, config: ConfigData) {
-        PriceOracleContractBase::config(e, 
-            &config.admin, 
-            &config.base_asset, 
-            config.decimals, 
-            config.resolution, 
-            config.history_retention_period, 
-            config.cache_size, 
-            &config.retention_config, 
+        PriceOracleContractBase::config(
+            e,
+            &config.admin,
+            &config.base_asset,
+            config.decimals,
+            config.resolution,
+            config.history_retention_period,
+            config.cache_size,
+            &config.retention_config,
             config.assets,
-            0
+            0,
         );
         settings::set_invocation_config(e, &config.invocation_config);
     }

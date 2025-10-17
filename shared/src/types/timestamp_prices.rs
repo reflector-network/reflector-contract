@@ -7,5 +7,5 @@ pub struct TimestampPrices {
     // Prices for assets that have been updated
     pub prices: Vec<i128>,
     // Bitmap of assets that have been updated
-    pub mask: Bytes
+    pub mask: Bytes,
 }
