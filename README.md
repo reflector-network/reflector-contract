@@ -144,7 +144,7 @@ pub enum Error {
 }
 ```
 
-### **Pulse contract**
+### **Beam contract**
 
 ### Invocation from consumer contract
 
