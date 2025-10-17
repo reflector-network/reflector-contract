@@ -110,14 +110,15 @@ impl PriceOracleContractBase {
     // * `sponsor` - Address that sponsors price feed
     // * `asset` - Quoted asset
     // * `amount` - Amount of tokens to burn for extending the expiration date
+    // * `initial_expiration_period` - Initial expiration period for new assets (in days)
     //
     // # Panics
     //
     // Panics if the asset is not supported or if retention config is malformed/missing
-    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
+    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128, initial_expiration_period: u32) {
         //check sponsor authorization
         sponsor.require_auth();
-        assets::extend_ttl(e, sponsor, asset, amount);
+        assets::extend_ttl(e, sponsor, asset, amount, initial_expiration_period);
     }
 
     // Return the fee token address daily price feed retainer fee amount
@@ -321,11 +322,12 @@ impl PriceOracleContractBase {
     // * `cache_size` - Number of rounds held in instance cache
     // * `retention_config` - Contract retention config
     // * `assets` - Initial list of supported assets
+    // * `initial_expiration_period` - Initial expiration period for new assets (in days)
     //
     // # Panics
     //
     // Panics if not authorized or if contract is already initialized
-    pub fn config(e: &Env, admin: &Address, base: &Asset, decimals: u32, resolution: u32, history_retention_period: u64, cache_size: u32, retention_config: &FeeConfig, assets: Vec<Asset>) {
+    pub fn config(e: &Env, admin: &Address, base: &Asset, decimals: u32, resolution: u32, history_retention_period: u64, cache_size: u32, retention_config: &FeeConfig, assets: Vec<Asset>, initial_expiration_period: u32) {
         //should be invoked by admin
         admin.require_auth();
         //apply settings
@@ -333,7 +335,7 @@ impl PriceOracleContractBase {
         auth::set_admin(e, admin);
         protocol::set_protocol_version(e, protocol::CURRENT_PROTOCOL);
         //add initial assets
-        assets::add_assets(&e, assets);
+        assets::add_assets(&e, assets, initial_expiration_period);
     }
 
     // Update contract cache size
@@ -357,13 +359,14 @@ impl PriceOracleContractBase {
     // # Arguments
     //
     // * `assets` - Assets to add
+    // * `initial_expiration_period` - Initial expiration period for new assets (in days)
     //
     // # Panics
     //
     // Panics if not authorized, any of the assets were added earlier, or assets limit exceeded
-    pub fn add_assets(e: &Env, assets: Vec<Asset>) {
+    pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
         auth::panic_if_not_admin(e);
-        assets::add_assets(&e, assets);
+        assets::add_assets(&e, assets, initial_expiration_period);
     }
 
     // Sets history retention period for the prices
@@ -387,14 +390,15 @@ impl PriceOracleContractBase {
     // # Arguments
     //
     // * `fee_config` - Fee token address and fee amount
+    // * `initial_expiration_period` - Initial expiration period for new assets (in days)
     //
     // # Panics
     //
     // Panics if not authorized or not initialized yet
-    pub fn set_retention_config(e: &Env, retention_config: FeeConfig) {
+    pub fn set_retention_config(e: &Env, retention_config: FeeConfig, initial_expiration_period: u32) {
         auth::panic_if_not_admin(e);
         settings::set_retention_config(e, &retention_config);
-        assets::init_expiration_config(e);
+        assets::init_expiration_config(e, initial_expiration_period);
     }
 
     // Record new price feed history snapshot

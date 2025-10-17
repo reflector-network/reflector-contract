@@ -461,11 +461,13 @@ fn set_retention_config_test() {
     fee_token.mint(&sponsor, &10);
 
     let symbol_expires = client.expires(&asset).unwrap();
+    assert_eq!(symbol_expires, 0);
     client.extend_asset_ttl(&sponsor, &asset, &10);
-    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 123428571); //123428571 ms you get for 9 XRF tokens
+    let ledger_ts = env.ledger().timestamp() * 1000;
+    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + ledger_ts + 123428571); //initial ttl is 0, so ledger + 123428571 (ms you get for 10 XRF tokens) is expected
 
     let fee_token_balance = TokenClient::new(&env, &fee_asset.address()).balance(&sponsor);
-    assert_eq!(fee_token_balance, 0); //1 XRF token is left after paying the fee
+    assert_eq!(fee_token_balance, 0);
 }
 
 #[test]

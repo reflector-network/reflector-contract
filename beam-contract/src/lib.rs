@@ -117,7 +117,7 @@ impl PriceOracleContract {
     //
     // Panics if the asset is not supported or if retention config is malformed/missing
     pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
-        PriceOracleContractBase::extend_asset_ttl(e, sponsor, asset, amount);
+        PriceOracleContractBase::extend_asset_ttl(e, sponsor, asset, amount, 0);
     }
 
     // Return the fee token address daily price feed retainer fee amount
@@ -317,7 +317,8 @@ impl PriceOracleContract {
             config.history_retention_period, 
             config.cache_size, 
             &config.retention_config, 
-            config.assets
+            config.assets,
+            0
         );
         settings::set_invocation_config(e, &config.invocation_config);
     }
@@ -347,7 +348,7 @@ impl PriceOracleContract {
     //
     // Panics if not authorized, any of the assets were added earlier, or assets limit exceeded
     pub fn add_assets(e: &Env, assets: Vec<Asset>) {
-        PriceOracleContractBase::add_assets(e, assets);
+        PriceOracleContractBase::add_assets(e, assets, 0);
     }
 
     // Sets history retention period for the prices
@@ -375,7 +376,7 @@ impl PriceOracleContract {
     //
     // Panics if not authorized or not initialized yet
     pub fn set_retention_config(e: &Env, retention_config: FeeConfig) {
-        PriceOracleContractBase::set_retention_config(e, retention_config);
+        PriceOracleContractBase::set_retention_config(e, retention_config, 0);
     }
 
     // Set fee token address and invocation fee amount

@@ -2,12 +2,20 @@ use crate::types::{asset::Asset, error::Error, fee_config::FeeConfig};
 use crate::{settings, timestamps};
 use soroban_sdk::{panic_with_error, token::TokenClient, Address, Env, Vec};
 
-const INITIAL_EXPIRATION_PERIOD: u32 = 180; //6 months
 const ASSET_LIMIT: u32 = 1000; //current limit
 
 //storage keys
 const ASSETS_KEY: &str = "assets";
 const EXPIRATION_KEY: &str = "expiration";
+
+fn get_expiration_timestamp(e: &Env, initial_expiration_period: u32) -> u64 {
+    if initial_expiration_period > 0 {
+        return timestamps::ledger_timestamp(&e)
+            .checked_add(timestamps::days_to_milliseconds(initial_expiration_period))
+            .unwrap();
+    }
+    0u64
+}
 
 // Get all contract assets
 pub fn load_all_assets(e: &Env) -> Vec<Asset> {
@@ -43,11 +51,9 @@ pub fn resolve_asset_pair_indexes(
 }
 
 // Add assets to the oracle
-pub fn add_assets(e: &Env, assets: Vec<Asset>) {
+pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     //use default expiration period for new assets
-    let expiration_timestamp = timestamps::ledger_timestamp(&e)
-        .checked_add(timestamps::days_to_milliseconds(INITIAL_EXPIRATION_PERIOD))
-        .unwrap();
+    let expiration_timestamp = get_expiration_timestamp(e, initial_expiration_period);
     //load current state
     let mut asset_list = load_all_assets(e);
     let mut expiration = load_expiration_records(e);
@@ -61,7 +67,7 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>) {
         set_asset_index(e, &asset, asset_list.len());
         asset_list.push_back(asset);
         //if the fee is not set, we don't need to set the expiration
-        if is_retention_config_set {
+        if is_retention_config_set && expiration_timestamp > 0 {
             expiration.push_back(expiration_timestamp); //set expiration
         }
     }
@@ -84,15 +90,13 @@ pub fn expires(e: &Env, asset: Asset) -> Option<u64> {
 }
 
 // Initialize expiration records for all existing assets
-pub fn init_expiration_config(e: &Env) {
+pub fn init_expiration_config(e: &Env, initial_expiration_period: u32) {
     let mut expiration_records = load_expiration_records(e);
     if expiration_records.len() > 0 {
         return; // expiration values for existing price feeds already initialized
     }
     //init expiration, set INITIAL_EXPIRATION_PERIOD for all symbols by default
-    let exp = timestamps::ledger_timestamp(&e)
-        .checked_add(timestamps::days_to_milliseconds(INITIAL_EXPIRATION_PERIOD))
-        .unwrap();
+    let exp = get_expiration_timestamp(e, initial_expiration_period);
     //add records to the expirations vector
     let assets = load_all_assets(e);
     for _ in 0..assets.len() {
@@ -102,7 +106,7 @@ pub fn init_expiration_config(e: &Env) {
 }
 
 // Extend time-to-live for given asset price feed
-pub fn extend_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
+pub fn extend_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128, initial_expiration_period: u32) {
     //check if the amount is valid
     if amount <= 0 {
         e.panic_with_error(Error::InvalidAmount);
@@ -137,7 +141,7 @@ pub fn extend_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
     let now = timestamps::ledger_timestamp(&e);
     let mut asset_expiration = expiration
         .get(asset_index)
-        .unwrap_or_else(|| now + timestamps::days_to_milliseconds(INITIAL_EXPIRATION_PERIOD));
+        .unwrap_or_else(|| now + timestamps::days_to_milliseconds(initial_expiration_period));
     //if the asset expiration is not set, or it's already expired - set it to now
     if asset_expiration == 0 || asset_expiration < now {
         asset_expiration = now;
