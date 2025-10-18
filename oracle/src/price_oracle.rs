@@ -1,12 +1,10 @@
 use crate::types::ConfigData;
 use crate::types::{Asset, Error, FeeConfig, PriceData, PriceUpdate};
 use crate::{assets, auth, events, prices, protocol, settings, timestamps};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec};
+use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec};
 
-#[contract]
 pub struct PriceOracleContractBase;
 
-#[contractimpl]
 impl PriceOracleContractBase {
     // Return base asset price is reported in
     //
