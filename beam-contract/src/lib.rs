@@ -4,6 +4,7 @@ mod tests;
 
 use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
 use oracle::price_oracle::PriceOracleContractBase;
+use oracle::settings;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
@@ -129,9 +130,19 @@ impl BeamOracleContract {
     //
     // # Returns
     //
-    // invocation costs config
+    // Invocation costs categorized by complexity
     pub fn invocation_costs(e: &Env) -> Vec<u64> {
         load_costs_config(e)
+    }
+
+    // Estimate invocation cost based on its complexity
+    //
+    // # Returns
+    //
+    // Amount of fee tokens required to pay for the call
+    pub fn estimate_cost(e: &Env, invocation: InvocationComplexity, rounds: u32) -> i128 {
+        let fee_config = settings::get_fee_config(e);
+        cost::estimate_invocation_cost(e, invocation, rounds, fee_config)
     }
 
     // Return contract admin address

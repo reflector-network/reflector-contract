@@ -1,7 +1,6 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::cost;
 use crate::cost::InvocationComplexity;
 use crate::{BeamOracleContract, BeamOracleContractClient};
 use oracle::types::{Asset, ConfigData, FeeConfig};
@@ -105,14 +104,22 @@ fn invocation_charge_test() {
 #[test_case(InvocationComplexity::CrossTwap, 7, 66_000_000 ; "multi round cross twap")]
 fn invocation_charge_estimate_test(
     invocation: InvocationComplexity,
-    rounds: u32,
-    expected_fee: u64,
+    periods: u32,
+    expected_fee: i128,
 ) {
-    let env = Env::default();
+    let (env, client, init_data) = init_contract_with_admin();
+
+    let fee_asset = env
+        .register_stellar_asset_contract_v2(init_data.admin.clone())
+        .address();
+    let fee_config = FeeConfig::Some((fee_asset.clone(), 1_000_000));
+    client.set_fee_config(&fee_config);
     let costs = Vec::from_array(
         &env,
         [2_000_000, 10_000_000, 15_000_000, 20_000_000, 30_000_000],
     );
-    let fee = cost::estimate_invocation_cost(costs, invocation, rounds);
+    client.set_invocation_costs_config(&costs);
+
+    let fee = client.estimate_cost(&invocation, &periods);
     assert_eq!(fee, expected_fee);
 }

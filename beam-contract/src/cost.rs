@@ -1,15 +1,22 @@
 use oracle::settings;
 use oracle::types::FeeConfig;
-use soroban_sdk::{token, Address, Env, Vec};
+use soroban_sdk::{contracttype, token, Address, Env, Vec};
 
 const COST_CONFIG_KEY: &str = "cost";
-const SCALE: u64 = 10_000_000;
+const SCALE: i128 = 10_000_000;
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum InvocationComplexity {
+    //Multiplicator for number of requested periods, not utilized directly for cost calculation
     NModifier = 0,
+    //Single asset price record request
     Price = 1,
+    //TWAP approximation over N records
     Twap = 2,
+    //Cross-price calculation for two assets
     CrossPrice = 3,
+    //TWAP approximation over N records for cross-price quote
     CrossTwap = 4,
 }
 //invocation cost config is stored as vector with indexes corresponding to InvocationComplexity
@@ -38,49 +45,51 @@ pub fn charge_invocation_fee(
     e: &Env,
     caller: &Address,
     invocation: InvocationComplexity,
-    rounds: u32,
+    periods: u32,
 ) {
+    //load fee config
     let fee_config = settings::get_fee_config(e);
+    if let FeeConfig::Some((fee_token, _)) = fee_config.clone() {
+        //calculate amount to charge
+        let cost = estimate_invocation_cost(e, invocation, periods, fee_config);
+        if cost <= 0 {
+            return;
+        }
+        //init fee token client
+        let fee_client = token::Client::new(e, &fee_token);
+        //burn tokens
+        fee_client.burn(caller, &cost);
+    }
+}
+
+// Estimate invocation cost based on its complexity and fee config
+pub fn estimate_invocation_cost(
+    e: &Env,
+    invocation: InvocationComplexity,
+    periods: u32,
+    fee_config: FeeConfig,
+) -> i128 {
     match fee_config {
-        FeeConfig::None => return,
-        FeeConfig::Some((fee_token, _)) => {
+        FeeConfig::None => 0,
+        FeeConfig::Some(_) => {
             //load rates
             let costs = load_costs_config(e);
             //calculate amount to charge
-            let cost = estimate_invocation_cost(costs, invocation, rounds) as i128;
-            //init fee token client
-            let fee_client = token::Client::new(e, &fee_token);
-            //burn tokens
-            fee_client.burn(caller, &cost);
+            //resolve base cost based on the invocation type
+            let mut cost = costs.get(invocation as u32).unwrap_or_default() as i128;
+            if cost < 1 {
+                return 0;
+            }
+            //charge additional per each loaded period
+            if periods > 1 {
+                let period_modifier = costs
+                    .get(InvocationComplexity::NModifier as u32)
+                    .unwrap_or_default() as i128;
+                if period_modifier > 0 {
+                    cost = cost * (SCALE + (periods - 1) as i128 * period_modifier) / SCALE;
+                }
+            }
+            cost
         }
     }
-}
-
-// Calculate invocation cost based on its complexity
-pub fn estimate_invocation_cost(
-    costs: Vec<u64>,
-    invocation: InvocationComplexity,
-    periods: u32,
-) -> u64 {
-    //resolve base cost based on the invocation type
-    let mut cost = costs.get(invocation as u32).unwrap_or_default();
-    if cost < 1 {
-        return 0;
-    }
-    //charge additional per each loaded period
-    if periods > 1 {
-        let period_cost = costs
-            .get(InvocationComplexity::NModifier as u32)
-            .unwrap_or_default();
-        if period_cost > 0 {
-            cost = mul_scaled(cost, SCALE + (periods - 1) as u64 * period_cost);
-        }
-    }
-    cost
-}
-
-// Multiply two scaled values
-#[inline(always)]
-fn mul_scaled(value: u64, factor: u64) -> u64 {
-    value * factor / SCALE
 }

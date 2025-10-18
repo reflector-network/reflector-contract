@@ -191,7 +191,7 @@ impl MyAwesomeContract {
 
 ### Interface for Beam contract
 
-#### Copy and save it in your smart contract project as "reflector_beam.rs" file. This is the oracle client..
+#### Copy and save it in your smart contract project as "reflector_beam.rs" file. This is the oracle client.
 
 ```rust
 /* reflector.rs */
@@ -236,6 +236,8 @@ pub trait Contract {
     fn extend_asset_ttl(e: Env, sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
     fn expires(e: &Env, asset: Asset) -> Option<u64>;
+    // Estimate invocation cost based on its complexity
+    fn estimate_cost(e: &Env, invocation: InvocationComplexity, rounds: u32) -> i128;
 }
 
 // Quoted asset definition
@@ -252,6 +254,17 @@ pub enum Asset {
 pub struct PriceData {
     pub price: i128,   // asset price at given point in time
     pub timestamp: u64 // record timestamp
+}
+
+// Invocation complexity factor
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum InvocationComplexity {    
+    NModifier = 0, //multiplier for number of requested periods, not utilized directly for cost calculation
+    Price = 1, //single asset price record request
+    Twap = 2, //TWAP approximation over N records
+    CrossPrice = 3, //cross-price calculation for two assets
+    CrossTwap = 4, //TWAP approximation over N records for cross-price quote
 }
 
 // Possible runtime errors
