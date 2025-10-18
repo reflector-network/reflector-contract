@@ -58,7 +58,7 @@ pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<
 }
 
 // Extract prices for all assets from update record
-pub(crate) fn extract_update_record_prices(e: &Env, update: &PriceUpdate, total: u32) -> Vec<i128> {
+pub fn extract_update_record_prices(e: &Env, update: &PriceUpdate, total: u32) -> Vec<i128> {
     let mut res = Vec::new(&e);
     let mut update_index = 0;
     for asset_index in 0..total {

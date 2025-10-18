@@ -2,13 +2,11 @@
 extern crate alloc;
 extern crate std;
 
-use crate::types::{Asset, FeeConfig, PriceUpdate};
 use alloc::string::ToString;
 use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{symbol_short, Address, IntoVal, Symbol, TryIntoVal, Vec};
-use test_case::test_case;
-
+use oracle::types::{Asset, FeeConfig, PriceUpdate};
 use crate::tests::setup_tests::{
     convert_to_seconds, generate_assets, generate_update_record_mask, generate_updates,
     init_contract, normalize_price, DECIMALS, RESOLUTION,
@@ -113,16 +111,15 @@ fn set_price_future_timestamp_test() {
     client.set_price(&updates, &timestamp);
 }
 
-#[test_case(0 ; "with zero expiration period")]
-#[test_case(180 ; "with 180d expiration period")]
-fn add_assets_test(initial_expiration_period: u32) {
+#[test]
+fn add_assets_test() {
     let (env, client, init_data) = init_contract();
 
     let assets = generate_assets(&env, 10, init_data.assets.len() - 1);
 
     env.mock_all_auths();
 
-    client.add_assets(&assets, &initial_expiration_period);
+    client.add_assets(&assets);
 
     let result = client.assets();
 
@@ -146,7 +143,7 @@ fn add_assets_duplicate_test() {
 
     env.mock_all_auths();
 
-    client.add_assets(&assets, &0);
+    client.add_assets(&assets);
 }
 
 #[test]
@@ -166,7 +163,7 @@ fn asset_update_overflow_test() {
         )));
     }
 
-    client.add_assets(&assets, &0);
+    client.add_assets(&assets);
 }
 
 #[test]
@@ -185,7 +182,7 @@ fn price_update_overflow_test() {
     let mask = generate_update_record_mask(&env, &updates);
     let update = PriceUpdate {
         prices: updates,
-        mask: mask,
+        mask,
     };
     client.set_price(&update, &600_000);
 }
@@ -220,7 +217,7 @@ fn set_fee_config_test() {
 
     let fee_config = FeeConfig::Some((fee_asset.address(), 7));
 
-    client.set_fee_config(&fee_config, &3); //3 days
+    client.set_fee_config(&fee_config); //3 days
 
     let result = client.fee_config();
     assert_ne!(result, FeeConfig::None);
@@ -236,8 +233,8 @@ fn set_fee_config_test() {
     fee_token.mint(&sponsor, &10);
 
     let symbol_expires = client.expires(&asset).unwrap();
-    assert_eq!(symbol_expires, 260100000); // 900s current ledger timestamp + 3 days off initial expiration period
-    client.extend_asset_ttl(&sponsor, &asset, &10, &0);
+    assert_eq!(symbol_expires, 15552900000); // 900s current ledger timestamp + 180 days of initial expiration period
+    client.extend_asset_ttl(&sponsor, &asset, &10);
     //123428571 ms you get for 10 XRF tokens
     assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 123428571);
 

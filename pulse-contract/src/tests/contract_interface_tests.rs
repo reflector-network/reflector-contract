@@ -1,11 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::prices;
 use crate::tests::setup_tests::{
     convert_to_seconds, generate_random_updates, generate_updates, init_contract, normalize_price,
 };
-use crate::types::FeeConfig;
+use oracle::prices;
+use oracle::types::FeeConfig;
 use soroban_sdk::testutils::{Ledger, LedgerInfo};
 use soroban_sdk::Vec;
 
@@ -63,7 +63,7 @@ fn price_test() {
         .register_stellar_asset_contract_v2(init_data.admin.clone())
         .address();
     let fee_config = FeeConfig::Some((fee_asset.clone(), 1_000_000));
-    client.set_fee_config(&fee_config, &180);
+    client.set_fee_config(&fee_config);
 
     //get price for the first asset
     let price = client

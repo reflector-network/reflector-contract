@@ -1,4 +1,5 @@
 #![no_std]
+mod tests;
 
 use oracle::price_oracle::PriceOracleContractBase;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
