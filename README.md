@@ -108,8 +108,6 @@ pub trait Contract {
     fn extend_asset_ttl(e: Env, sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
     fn expires(e: &Env, asset: Asset) -> Option<u64>;
-    // Get retention FeeConfig configuration
-    fn fee_config(e: &Env) -> FeeConfig;
 }
 
 // Quoted asset definition
@@ -238,10 +236,6 @@ pub trait Contract {
     fn extend_asset_ttl(e: Env, sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
     fn expires(e: &Env, asset: Asset) -> Option<u64>;
-    // Get fee configuration
-    fn fee_config(e: &Env) -> FeeConfig;
-    // Get config with invocation costs
-    fn invocation_costs(e: &Env) -> Vec<u64>;
 }
 
 // Quoted asset definition
@@ -306,7 +300,7 @@ pub enum Error {
 2. Run the tests:
 
     ```bash
-    cargo test --package pulse-contract
+    cargo test --package reflector_pulse_contract
     ```
 
 ## Building Contracts
@@ -338,7 +332,7 @@ pub enum Error {
     ```
 2. Run the build command for the specific contract:
     ```bash
-    stellar contract build --package pulse-contract
+    stellar contract build --package reflector-reflector_pulse_contract
     ```
 
 ### Optimizing WASM
