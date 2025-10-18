@@ -2,15 +2,15 @@
 extern crate alloc;
 extern crate std;
 
-use alloc::string::ToString;
-use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
-use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{symbol_short, Address, IntoVal, Symbol, TryIntoVal, Vec};
-use oracle::types::{Asset, FeeConfig, PriceUpdate};
 use crate::tests::setup_tests::{
     convert_to_seconds, generate_assets, generate_update_record_mask, generate_updates,
     init_contract, normalize_price, DECIMALS, RESOLUTION,
 };
+use alloc::string::ToString;
+use oracle::types::{Asset, FeeConfig, PriceUpdate};
+use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
+use soroban_sdk::{symbol_short, Address, IntoVal, Symbol, TryIntoVal, Vec};
 
 #[test]
 fn init_test() {
