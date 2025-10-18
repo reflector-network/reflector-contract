@@ -4,15 +4,14 @@ extern crate std;
 
 use soroban_sdk::{log, Bytes, Env, Vec};
 
-use super::*;
+use crate::{mapping, prices};
 use std::panic::{self, AssertUnwindSafe};
 
 fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
-    for (asset_index, price) in updates.iter().enumerate() {
+    for (asset, price) in updates.iter().enumerate() {
         if price > 0 {
-            let (byte, bitmask) =
-                pos_encoding::locate_update_record_mask_position(asset_index as u32);
+            let (byte, bitmask) = mapping::resolve_period_update_mask_position(asset as u32);
             let i = byte as usize;
             let bytemask = mask[i] | bitmask;
             mask[i] = bytemask
@@ -22,7 +21,7 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
 }
 
 #[test]
-fn div_tests() {
+fn fixed_div_floor_tests() {
     let test_cases = [
         (154467226919499, 133928752749774, 115335373284703),
         (
@@ -53,7 +52,7 @@ fn div_tests() {
 }
 
 #[test]
-fn pos_encoding_bitmask() {
+fn position_encoding_bitmask_test() {
     let e = Env::default();
     let mut mask = Bytes::new(&e);
     let total_assets = 5;
@@ -67,7 +66,7 @@ fn pos_encoding_bitmask() {
             };
             updates.push_back(price);
         }
-        mask = pos_encoding::update_position_mask(&e, mask, &updates);
+        mask = mapping::update_history_mask(&e, mask, &updates);
     }
     log!(&e, "entire mask", mask);
 
@@ -82,14 +81,14 @@ fn pos_encoding_bitmask() {
         let check_period = total_periods - period - 1;
         for asset_index in 0..total_assets {
             let expected = asset_index > 0 && ((period + period_diff) % asset_index == 0);
-            let found = pos_encoding::had_update(&mask, asset_index, check_period);
+            let found = mapping::check_history_updated(&mask, asset_index, check_period);
             assert_eq!(found, expected);
         }
     }
 }
 
 #[test]
-fn update_record_bitmask() {
+fn update_record_bitmask_test() {
     let e = Env::default();
     let iterations = 70;
 
@@ -106,7 +105,7 @@ fn update_record_bitmask() {
         //log!(&e, "entire mask", mask);
         for (asset_index, price) in updates.iter().enumerate() {
             assert_eq!(
-                pos_encoding::check_update_record_mask(&mask, asset_index as u32),
+                mapping::check_period_updated(&mask, asset_index as u32),
                 price > 0
             );
         }

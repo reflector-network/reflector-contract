@@ -1,5 +1,5 @@
 [package]
-name = "pulse-contract"
+name = "reflector-pulse-contract"
 version = "6.0.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-shared = { path = "../shared" }
+oracle = { path = "../oracle" }
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]

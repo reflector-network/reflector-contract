@@ -1,26 +1,19 @@
 #![no_std]
+extern crate alloc;
 
-mod charge;
-mod settings;
-mod test;
-mod types;
+mod cost;
+mod tests;
 
-use shared::{
-    price_oracle::PriceOracleContractBase,
-    types::{
-        asset::Asset, fee_config::FeeConfig, price_data::PriceData,
-        timestamp_prices::TimestampPrices,
-    },
-};
+use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
+use oracle::price_oracle::PriceOracleContractBase;
+use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-use crate::types::{config_data::ConfigData, invocation::Invocation};
-
 #[contract]
-pub struct PriceOracleContract;
+pub struct BeamOracleContract;
 
 #[contractimpl]
-impl PriceOracleContract {
+impl BeamOracleContract {
     // Return base asset price is reported in
     //
     // # Returns
@@ -130,17 +123,17 @@ impl PriceOracleContract {
     // # Returns
     //
     // Fee token address and daily price feed retainer fee amount
-    pub fn retention_config(e: &Env) -> FeeConfig {
-        PriceOracleContractBase::retention_config(e)
+    pub fn fee_config(e: &Env) -> FeeConfig {
+        PriceOracleContractBase::fee_config(e)
     }
 
-    // Return the fee token address and invocation fee amount
+    // Retrieve current invocation costs config
     //
     // # Returns
     //
-    // Fee token address and invocation fee amount
-    pub fn invocation_config(e: &Env) -> FeeConfig {
-        settings::get_invocation_config(e)
+    // invocation costs config
+    pub fn invocation_costs(e: &Env) -> Vec<u64> {
+        load_costs_config(e)
     }
 
     // Return contract admin address
@@ -156,7 +149,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `asset` - Asset to quote
     // * `timestamp` - Timestamp in seconds
     //
@@ -165,7 +158,7 @@ impl PriceOracleContract {
     // Price record for given asset at given timestamp or None if not found
     pub fn price(e: &Env, caller: Address, asset: Asset, timestamp: u64) -> Option<PriceData> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::Price, 1);
+        charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
         PriceOracleContractBase::price(e, asset, timestamp)
     }
 
@@ -173,7 +166,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `asset` - Asset to quote
     //
     // # Returns
@@ -181,7 +174,7 @@ impl PriceOracleContract {
     // Most recent price for given asset or None if asset is not supported
     pub fn lastprice(e: &Env, caller: Address, asset: Asset) -> Option<PriceData> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::Price, 1);
+        charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
         PriceOracleContractBase::lastprice(e, asset)
     }
 
@@ -189,7 +182,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `asset` - Asset to quote
     // * `records` - Number of records to return
     //
@@ -198,7 +191,7 @@ impl PriceOracleContract {
     // Prices for given asset or None if asset is not supported
     pub fn prices(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::Price, records);
+        charge_invocation_fee(e, &caller, InvocationComplexity::Price, records);
         PriceOracleContractBase::prices(e, asset, records)
     }
 
@@ -206,7 +199,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     //
@@ -220,7 +213,7 @@ impl PriceOracleContract {
         quote_asset: Asset,
     ) -> Option<PriceData> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::CrossPrice, 1);
+        charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
         PriceOracleContractBase::x_last_price(e, base_asset, quote_asset)
     }
 
@@ -228,7 +221,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     // * `timestamp` - Timestamp
@@ -244,7 +237,7 @@ impl PriceOracleContract {
         timestamp: u64,
     ) -> Option<PriceData> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::CrossPrice, 1);
+        charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
         PriceOracleContractBase::x_price(e, base_asset, quote_asset, timestamp)
     }
 
@@ -252,7 +245,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     // * `records` - Number of records to fetch
@@ -268,7 +261,7 @@ impl PriceOracleContract {
         records: u32,
     ) -> Option<Vec<PriceData>> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::CrossPrice, records);
+        charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, records);
         PriceOracleContractBase::x_prices(e, base_asset, quote_asset, records)
     }
 
@@ -276,7 +269,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `asset` - Asset to quote
     // * `records` - Number of records to process
     //
@@ -285,7 +278,7 @@ impl PriceOracleContract {
     // TWAP for the given asset over N recent records or None if asset is not supported
     pub fn twap(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<i128> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::Twap, 1);
+        charge_invocation_fee(e, &caller, InvocationComplexity::Twap, 1);
         PriceOracleContractBase::twap(e, asset, records)
     }
 
@@ -293,7 +286,7 @@ impl PriceOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Address of the caller
+    // * `caller` - Caller that covers invocation cost
     // * `base_asset` - Base asset
     // * `quote_asset` - Quote asset
     // * `records` - Number of records to process
@@ -309,7 +302,7 @@ impl PriceOracleContract {
         records: u32,
     ) -> Option<i128> {
         caller.require_auth();
-        charge::charge_fee(e, &caller, Invocation::CrossTwap, records);
+        charge_invocation_fee(e, &caller, InvocationComplexity::CrossTwap, records);
         PriceOracleContractBase::x_twap(e, base_asset, quote_asset, records)
     }
 
@@ -325,19 +318,7 @@ impl PriceOracleContract {
     //
     // Panics if not authorized or if contract is already initialized
     pub fn config(e: &Env, config: ConfigData) {
-        PriceOracleContractBase::config(
-            e,
-            &config.admin,
-            &config.base_asset,
-            config.decimals,
-            config.resolution,
-            config.history_retention_period,
-            config.cache_size,
-            &config.retention_config,
-            config.assets,
-            0,
-        );
-        settings::set_invocation_config(e, &config.invocation_config);
+        PriceOracleContractBase::config(e, config, 0);
     }
 
     // Update contract cache size
@@ -392,22 +373,22 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if not authorized or not initialized yet
-    pub fn set_retention_config(e: &Env, retention_config: FeeConfig) {
-        PriceOracleContractBase::set_retention_config(e, retention_config, 0);
+    pub fn set_fee_config(e: &Env, config: FeeConfig) {
+        PriceOracleContractBase::set_fee_config(e, config, 0);
     }
 
-    // Set fee token address and invocation fee amount
+    // Update costs configuration per each invocation category
     // Requires admin authorization
     //
     // # Arguments
     //
-    // * `fee_config` - Fee token address and fee amount
+    // * `config` - Invocation costs for different invocation categories
     //
     // # Panics
     //
     // Panics if not authorized or not initialized yet
-    pub fn set_invocation_config(e: &Env, invocation_config: FeeConfig) {
-        settings::set_invocation_config(e, &invocation_config);
+    pub fn set_invocation_costs_config(e: &Env, config: Vec<u64>) {
+        set_costs_config(e, &config);
     }
 
     // Record new price feed history snapshot
@@ -421,7 +402,7 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if not authorized or price snapshot record is invalid
-    pub fn set_price(e: &Env, updates: TimestampPrices, timestamp: u64) {
+    pub fn set_price(e: &Env, updates: PriceUpdate, timestamp: u64) {
         PriceOracleContractBase::set_price(e, updates, timestamp);
     }
 

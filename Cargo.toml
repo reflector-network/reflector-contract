@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["shared", "pulse-contract", "beam-contract"]
+members = ["oracle", "pulse-contract", "beam-contract"]
 
 [profile.release-with-logs]
 inherits = "release"

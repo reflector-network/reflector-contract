@@ -1,7 +1,4 @@
-use crate::{
-    assets,
-    types::{asset::Asset, error::Error},
-};
+use crate::types::{Asset, Error};
 use soroban_sdk::{contractevent, panic_with_error, Env, Val, Vec};
 
 #[contractevent(topics = ["REFLECTOR", "update"])]
@@ -14,16 +11,14 @@ pub struct UpdateEvent {
 
 // Compose and publish price update event
 #[inline]
-pub fn publish_update_event(e: &Env, updates: &Vec<i128>, timestamp: u64) {
-    //load all registered assets
-    let assets = assets::load_all_assets(e);
+pub fn publish_update_event(e: &Env, updates: &Vec<i128>, all_assets: &Vec<Asset>, timestamp: u64) {
     //validate length
-    if assets.len() < updates.len() {
+    if all_assets.len() < updates.len() {
         panic_with_error!(&e, Error::AssetLimitExceeded);
     }
     //prepare update event
     let mut event_updates = Vec::new(&e);
-    for (index, asset) in assets.iter().enumerate() {
+    for (index, asset) in all_assets.iter().enumerate() {
         //retrieve individual price
         let price = updates.get(index as u32).unwrap_or_default();
         if price == 0 {

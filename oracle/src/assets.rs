@@ -1,4 +1,4 @@
-use crate::types::{asset::Asset, error::Error, fee_config::FeeConfig};
+use crate::types::{Asset, Error, FeeConfig};
 use crate::{settings, timestamps};
 use soroban_sdk::{panic_with_error, token::TokenClient, Address, Env, Vec};
 
@@ -57,7 +57,7 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     //load current state
     let mut asset_list = load_all_assets(e);
     let mut expiration = load_expiration_records(e);
-    let is_retention_config_set = settings::get_retention_config(e) != FeeConfig::None;
+    let is_fee_config_set = settings::get_fee_config(e) != FeeConfig::None;
     //for each new asset
     for asset in assets.iter() {
         //check if the asset has been already added
@@ -67,7 +67,7 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
         set_asset_index(e, &asset, asset_list.len());
         asset_list.push_back(asset);
         //if the fee is not set, we don't need to set the expiration
-        if is_retention_config_set && expiration_timestamp > 0 {
+        if is_fee_config_set && expiration_timestamp > 0 {
             expiration.push_back(expiration_timestamp); //set expiration
         }
     }
@@ -124,7 +124,7 @@ pub fn extend_ttl(
     }
     let asset_index = asset_index.unwrap();
     //load required fee amount from retention config
-    let (xrf, fee) = match settings::get_retention_config(e) {
+    let (xrf, fee) = match settings::get_fee_config(e) {
         FeeConfig::Some(fee_data) => {
             if fee_data.1 <= 0 {
                 e.panic_with_error(Error::InvalidConfigVersion);

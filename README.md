@@ -109,7 +109,7 @@ pub trait Contract {
     // Get asset expiration timestamp
     fn expires(e: &Env, asset: Asset) -> Option<u64>;
     // Get retention FeeConfig configuration
-    fn retention_config(e: &Env) -> FeeConfig;
+    fn fee_config(e: &Env) -> FeeConfig;
 }
 
 // Quoted asset definition
@@ -238,10 +238,10 @@ pub trait Contract {
     fn extend_asset_ttl(e: Env, sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
     fn expires(e: &Env, asset: Asset) -> Option<u64>;
-    // Get retention FeeConfig configuration
-    fn retention_config(e: &Env) -> FeeConfig;
-    // Get invocation FeeConfig configuration
-    fn invocation_config(e: &Env) -> FeeConfig;
+    // Get fee configuration
+    fn fee_config(e: &Env) -> FeeConfig;
+    // Get config with invocation costs
+    fn invocation_costs(e: &Env) -> Vec<u64>;
 }
 
 // Quoted asset definition

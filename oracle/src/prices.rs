@@ -1,12 +1,10 @@
-use crate::pos_encoding;
-use crate::settings;
-use crate::types::{price_data::PriceData, timestamp_prices::TimestampPrices};
-use crate::{protocol, timestamps};
+use crate::types::{PriceData, PriceUpdate};
+use crate::{mapping, protocol, settings, timestamps};
 use soroban_sdk::{Bytes, Env, Vec};
 
 const CACHE_KEY: &str = "cache";
 const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
-const HISTORY_TIMESTAMPS_KEY: &str = "history_timestamps";
+const HISTORY_KEY: &str = "history";
 
 fn normalize_price_data(price: i128, timestamp: u64) -> PriceData {
     PriceData {
@@ -32,50 +30,60 @@ pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
 
 // Retrieve price from record for specific asset
 pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<PriceData> {
-    //if the protocol version is not current, use legacy method
+    //if protocol version < 2, use legacy method
     if !protocol::at_latest_protocol_version(e) {
         let price = get_price_v1(e, asset as u8, timestamp)?;
         return Some(normalize_price_data(price, timestamp));
     }
-    let last_timestamp = get_last_timestamp(e);
+    let last = get_last_timestamp(e);
     //get the timestamp index in the bitmask
-    if last_timestamp < timestamp {
+    if last < timestamp {
         return None;
     }
-    let mut timestamp_index = 0;
-    if last_timestamp > timestamp {
-        timestamp_index = (last_timestamp - timestamp) / settings::get_resolution(e) as u64;
+    let mut period = 0;
+    if last > timestamp {
+        period = (last - timestamp) / settings::get_resolution(e) as u64;
     }
-    if timestamp_index > 255 || !has_price(e, asset, timestamp_index as u32) {
-        //we cannot track more than 256 updates in the bitmask
-        return None;
+    if period > 255 {
+        return None; //we cannot track more than 256 updates in the bitmask
+    }
+    if !has_price(e, asset, period as u32) {
+        return None; //no price record
     }
     //load the prices for the timestamp
-    let timestamp_prices = timestamp_prices(e, timestamp)?;
+    let record = load_history_record(e, timestamp)?;
     //get price for the asset index
-    let price = get_prices_for_assets(e, &timestamp_prices, asset + 1).last()?; // as we requested asset+1, the last one is the requested asset
+    let price = extract_single_update_record_price(&record, asset);
     Some(normalize_price_data(price, timestamp))
 }
 
-// Extract prices for all assets from the update record by the assets length
-pub fn get_prices_for_assets(
-    e: &Env,
-    timestamp_prices: &TimestampPrices,
-    assets_length: u32,
-) -> Vec<i128> {
-    //normalize prices for internal processing
-    let mut normalized_vector_prices = Vec::new(&e);
-    let mut last_price_index = 0;
-    for asset_index in 0..assets_length {
+// Extract prices for all assets from update record
+pub(crate) fn extract_update_record_prices(e: &Env, update: &PriceUpdate, total: u32) -> Vec<i128> {
+    let mut res = Vec::new(&e);
+    let mut update_index = 0;
+    for asset_index in 0..total {
         let mut price = 0;
-        if pos_encoding::check_update_record_mask(&timestamp_prices.mask, asset_index) {
+        if mapping::check_period_updated(&update.mask, asset_index) {
             //set price from the update record
-            price = timestamp_prices.prices.get_unchecked(last_price_index);
-            last_price_index += 1;
+            price = update.prices.get_unchecked(update_index);
+            update_index += 1;
         }
-        normalized_vector_prices.push_back(price);
+        res.push_back(price);
     }
-    normalized_vector_prices
+    res
+}
+
+fn extract_single_update_record_price(update: &PriceUpdate, asset_index: u32) -> i128 {
+    let mut update_index = 0;
+    for asset in 0..asset_index + 1 {
+        if mapping::check_period_updated(&update.mask, asset) {
+            if asset == asset_index {
+                return update.prices.get_unchecked(update_index);
+            }
+            update_index += 1;
+        }
+    }
+    0
 }
 
 // Load last update timestamp
@@ -92,23 +100,25 @@ pub fn set_last_timestamp(e: &Env, timestamp: u64) {
     e.storage().instance().set(&LAST_TIMESTAMP_KEY, &timestamp);
 }
 
-pub fn get_history_timestamps(e: &Env) -> Bytes {
+// Load history mask containing the map of all periods that had price updates
+fn get_history_map(e: &Env) -> Bytes {
     e.storage()
         .instance()
-        .get(&HISTORY_TIMESTAMPS_KEY)
+        .get(&HISTORY_KEY)
         .unwrap_or_else(|| Bytes::new(e))
 }
 
-pub fn set_history_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
+//
+pub fn update_history_mask(e: &Env, prices: &Vec<i128>, timestamp: u64) {
+    //load state
     let last_timestamp = get_last_timestamp(e);
-    let mut timestamps = get_history_timestamps(e);
+    let mut history_map = get_history_map(e);
     let resolution = settings::get_resolution(e) as u64;
     //find the delta in updates
     let mut update_delta = 0;
     if last_timestamp > 0 && timestamp > last_timestamp {
         update_delta = (timestamp - last_timestamp) / resolution;
     }
-
     //add missing intervals
     if update_delta > 1 {
         for _ in 1..update_delta {
@@ -116,26 +126,24 @@ pub fn set_history_timestamps(e: &Env, prices: &Vec<i128>, timestamp: u64) {
             for _ in 0..prices.len() {
                 empty_prices.push_back(0i128);
             }
-            timestamps = pos_encoding::update_position_mask(e, timestamps, &empty_prices);
+            history_map = mapping::update_history_mask(e, history_map, &empty_prices);
         }
     }
 
     //update the position mask
-    timestamps = pos_encoding::update_position_mask(e, timestamps, prices);
+    history_map = mapping::update_history_mask(e, history_map, prices);
 
     //store updated timestamps
-    e.storage()
-        .instance()
-        .set(&HISTORY_TIMESTAMPS_KEY, &timestamps);
+    e.storage().instance().set(&HISTORY_KEY, &history_map);
 }
 
 pub fn has_price(e: &Env, asset_index: u32, periods_ago: u32) -> bool {
-    let timestamps = get_history_timestamps(e);
-    pos_encoding::had_update(&timestamps, asset_index, periods_ago)
+    let timestamps = get_history_map(e);
+    mapping::check_history_updated(&timestamps, asset_index, periods_ago)
 }
 
 // Load prices for a given timestamp
-pub fn timestamp_prices(e: &Env, timestamp: u64) -> Option<TimestampPrices> {
+pub fn load_history_record(e: &Env, timestamp: u64) -> Option<PriceUpdate> {
     //check if the timestamp is in the cache
     let cache = load_price_records_cache(e);
     if cache.is_some() {
@@ -151,7 +159,7 @@ pub fn timestamp_prices(e: &Env, timestamp: u64) -> Option<TimestampPrices> {
 }
 
 // Update prices stored in the oracle
-pub fn store_prices(e: &Env, update: &TimestampPrices, timestamp: u64, update_v1: &Vec<i128>) {
+pub fn store_prices(e: &Env, update: &PriceUpdate, timestamp: u64, update_v1: &Vec<i128>) {
     //get the last timestamp
     let last_timestamp = get_last_timestamp(e);
     //update the last timestamp
@@ -277,7 +285,7 @@ pub fn load_cross_price(
 }
 
 // Get cached records from the instance storage
-fn load_price_records_cache(e: &Env) -> Option<Vec<(u64, TimestampPrices)>> {
+fn load_price_records_cache(e: &Env) -> Option<Vec<(u64, PriceUpdate)>> {
     e.storage().instance().get(&CACHE_KEY)
 }
 

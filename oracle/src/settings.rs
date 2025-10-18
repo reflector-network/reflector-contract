@@ -1,4 +1,4 @@
-use crate::types::{asset::Asset, error::Error, fee_config::FeeConfig};
+use crate::types::{Asset, Error, FeeConfig};
 use soroban_sdk::{Address, Env};
 
 const RETENTION_PERIOD_KEY: &str = "period";
@@ -19,7 +19,7 @@ pub fn init(
     resolution: u32,
     history_retention_period: u64,
     cache_size: u32,
-    retention_config: &FeeConfig,
+    fee_config: &FeeConfig,
 ) {
     //do not allow to initialize more than once
     if e.storage().instance().has(&RETENTION_PERIOD_KEY) {
@@ -32,7 +32,7 @@ pub fn init(
     set_resolution(e, resolution);
     set_history_retention_period(e, history_retention_period);
     set_cache_size(e, cache_size);
-    set_retention_config(e, retention_config);
+    set_fee_config(e, fee_config);
 }
 
 #[inline]
@@ -81,19 +81,18 @@ pub fn set_cache_size(e: &Env, cache_size: u32) {
 }
 
 #[inline]
-pub fn set_retention_config(e: &Env, retention_config: &FeeConfig) {
-    e.storage()
-        .instance()
-        .set(&RETENTION_KEY, &retention_config);
+pub fn set_fee_config(e: &Env, fee_config: &FeeConfig) {
+    e.storage().instance().set(&RETENTION_KEY, &fee_config);
 }
 
 #[inline]
-pub fn get_retention_config(e: &Env) -> FeeConfig {
+pub fn get_fee_config(e: &Env) -> FeeConfig {
     e.storage()
         .instance()
         .get(&RETENTION_KEY)
         .unwrap_or_else(|| {
             FeeConfig::Some((
+                // by default - XRF tokens with 1 XRF base cost
                 Address::from_str(e, XRF_TOKEN_ADDRESS),
                 DEFAULT_RETENTION_FEE,
             ))

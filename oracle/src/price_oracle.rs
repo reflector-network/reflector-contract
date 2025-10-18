@@ -1,14 +1,12 @@
-use crate::{
-    assets, auth, events, prices, protocol, settings, timestamps,
-    types::{
-        asset::Asset, error::Error, fee_config::FeeConfig, price_data::PriceData,
-        timestamp_prices::TimestampPrices,
-    },
-};
-use soroban_sdk::{panic_with_error, Address, BytesN, Env, Vec};
+use crate::types::ConfigData;
+use crate::types::{Asset, Error, FeeConfig, PriceData, PriceUpdate};
+use crate::{assets, auth, events, prices, protocol, settings, timestamps};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec};
 
+#[contract]
 pub struct PriceOracleContractBase;
 
+#[contractimpl]
 impl PriceOracleContractBase {
     // Return base asset price is reported in
     //
@@ -138,8 +136,8 @@ impl PriceOracleContractBase {
     // # Returns
     //
     // Fee token address and daily price feed retainer fee amount
-    pub fn retention_config(e: &Env) -> FeeConfig {
-        settings::get_retention_config(e)
+    pub fn fee_config(e: &Env) -> FeeConfig {
+        settings::get_fee_config(e)
     }
 
     // Return contract admin address
@@ -332,41 +330,30 @@ impl PriceOracleContractBase {
     // * `resolution` - History timeframe resolution (in seconds)
     // * `history_retention_period` - Price history retention period (in seconds)
     // * `cache_size` - Number of rounds held in instance cache
-    // * `retention_config` - Contract retention config
+    // * `fee_config` - Contract retention config
     // * `assets` - Initial list of supported assets
     // * `initial_expiration_period` - Initial expiration period for new assets (in days)
     //
     // # Panics
     //
     // Panics if not authorized or if contract is already initialized
-    pub fn config(
-        e: &Env,
-        admin: &Address,
-        base: &Asset,
-        decimals: u32,
-        resolution: u32,
-        history_retention_period: u64,
-        cache_size: u32,
-        retention_config: &FeeConfig,
-        assets: Vec<Asset>,
-        initial_expiration_period: u32,
-    ) {
+    pub fn config(e: &Env, config: ConfigData, initial_expiration_period: u32) {
         //should be invoked by admin
-        admin.require_auth();
+        config.admin.require_auth();
         //apply settings
         settings::init(
             e,
-            base,
-            decimals,
-            resolution,
-            history_retention_period,
-            cache_size,
-            &retention_config,
+            &config.base_asset,
+            config.decimals,
+            config.resolution,
+            config.history_retention_period,
+            config.cache_size,
+            &config.fee_config,
         );
-        auth::set_admin(e, admin);
+        auth::set_admin(e, &config.admin);
         protocol::set_protocol_version(e, protocol::CURRENT_PROTOCOL);
         //add initial assets
-        assets::add_assets(&e, assets, initial_expiration_period);
+        assets::add_assets(&e, config.assets, initial_expiration_period);
     }
 
     // Update contract cache size
@@ -426,13 +413,9 @@ impl PriceOracleContractBase {
     // # Panics
     //
     // Panics if not authorized or not initialized yet
-    pub fn set_retention_config(
-        e: &Env,
-        retention_config: FeeConfig,
-        initial_expiration_period: u32,
-    ) {
+    pub fn set_fee_config(e: &Env, fee_config: FeeConfig, initial_expiration_period: u32) {
         auth::panic_if_not_admin(e);
-        settings::set_retention_config(e, &retention_config);
+        settings::set_fee_config(e, &fee_config);
         assets::init_expiration_config(e, initial_expiration_period);
     }
 
@@ -447,7 +430,7 @@ impl PriceOracleContractBase {
     // # Panics
     //
     // Panics if not authorized or price snapshot record is invalid
-    pub fn set_price(e: &Env, update: TimestampPrices, timestamp: u64) {
+    pub fn set_price(e: &Env, update: PriceUpdate, timestamp: u64) {
         auth::panic_if_not_admin(e);
         if update.prices.len() == 0 {
             return; //skip empty updates
@@ -460,13 +443,13 @@ impl PriceOracleContractBase {
         if timestamp == 0 || !timestamps::is_valid(e, timestamp) || timestamp > ledger_timestamp {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
-        //create vector of all assets prices
-        let asset_prices =
-            prices::get_prices_for_assets(e, &update, assets::load_all_assets(e).len());
+        //extract prices for all assets from update record
+        let all = assets::load_all_assets(e);
+        let asset_prices = prices::extract_update_record_prices(e, &update, all.len());
         //store history timestamps for all assets
-        prices::set_history_timestamps(e, &asset_prices, timestamp);
+        prices::update_history_mask(e, &asset_prices, timestamp);
         //prepare and publish update event
-        events::publish_update_event(e, &asset_prices, timestamp);
+        events::publish_update_event(e, &asset_prices, &all, timestamp);
         //store new prices
         prices::store_prices(e, &update, timestamp, &asset_prices);
     }

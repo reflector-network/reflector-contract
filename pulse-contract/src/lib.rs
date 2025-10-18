@@ -1,26 +1,15 @@
 #![no_std]
 
-mod test;
-mod types;
-
-use crate::types::config_data::ConfigData;
-
-use shared::{
-    price_oracle::PriceOracleContractBase,
-    types::{
-        asset::Asset, fee_config::FeeConfig, price_data::PriceData,
-        timestamp_prices::TimestampPrices,
-    },
-};
+use oracle::price_oracle::PriceOracleContractBase;
+use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 const INITIAL_EXPIRATION_PERIOD: u32 = 180; //6 months
-
 #[contract]
-pub struct PriceOracleContract;
+pub struct PulseOracleContract;
 
 #[contractimpl]
-impl PriceOracleContract {
+impl PulseOracleContract {
     // Return base asset price is reported in
     //
     // # Returns
@@ -136,8 +125,8 @@ impl PriceOracleContract {
     // # Returns
     //
     // Fee token address and daily price feed retainer fee amount
-    pub fn retention_config(e: &Env) -> FeeConfig {
-        PriceOracleContractBase::retention_config(e)
+    pub fn fee_config(e: &Env) -> FeeConfig {
+        PriceOracleContractBase::fee_config(e)
     }
 
     // Return contract admin address
@@ -285,18 +274,7 @@ impl PriceOracleContract {
     //
     // Panics if not authorized or if contract is already initialized
     pub fn config(e: &Env, config: ConfigData) {
-        PriceOracleContractBase::config(
-            e,
-            &config.admin,
-            &config.base_asset,
-            config.decimals,
-            config.resolution,
-            config.history_retention_period,
-            config.cache_size,
-            &config.retention_config,
-            config.assets,
-            INITIAL_EXPIRATION_PERIOD,
-        );
+        PriceOracleContractBase::config(e, config, INITIAL_EXPIRATION_PERIOD);
     }
 
     // Update contract cache size
@@ -351,12 +329,8 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if not authorized or not initialized yet
-    pub fn set_retention_config(e: &Env, retention_config: FeeConfig) {
-        PriceOracleContractBase::set_retention_config(
-            e,
-            retention_config,
-            INITIAL_EXPIRATION_PERIOD,
-        );
+    pub fn set_fee_config(e: &Env, fee_config: FeeConfig) {
+        PriceOracleContractBase::set_fee_config(e, fee_config, INITIAL_EXPIRATION_PERIOD);
     }
 
     // Record new price feed history snapshot
@@ -370,7 +344,7 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if not authorized or price snapshot record is invalid
-    pub fn set_price(e: &Env, updates: TimestampPrices, timestamp: u64) {
+    pub fn set_price(e: &Env, updates: PriceUpdate, timestamp: u64) {
         PriceOracleContractBase::set_price(e, updates, timestamp);
     }
 

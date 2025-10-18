@@ -1,4 +1,4 @@
-use crate::types::error;
+use crate::types::Error;
 use soroban_sdk::{panic_with_error, Address, Env};
 
 //storage keys
@@ -21,7 +21,7 @@ pub fn set_admin(e: &Env, admin: &Address) {
 pub fn panic_if_not_admin(e: &Env) {
     let admin = get_admin(e);
     if admin.is_none() {
-        panic_with_error!(e, error::Error::Unauthorized);
+        panic_with_error!(e, Error::Unauthorized);
     }
     admin.unwrap().require_auth()
 }

@@ -181,15 +181,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
-name = "beam-contract"
-version = "6.0.0"
-dependencies = [
- "shared",
- "soroban-sdk",
- "test-case",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -885,6 +876,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
+name = "oracle"
+version = "6.0.0"
+dependencies = [
+ "soroban-sdk",
+ "test-case",
+]
+
+[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -953,14 +952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pulse-contract"
-version = "6.0.0"
-dependencies = [
- "shared",
- "soroban-sdk",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1017,6 +1008,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "reflector-beam-contract"
+version = "6.0.0"
+dependencies = [
+ "oracle",
+ "soroban-sdk",
+ "test-case",
+]
+
+[[package]]
+name = "reflector-pulse-contract"
+version = "6.0.0"
+dependencies = [
+ "oracle",
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -1192,13 +1200,6 @@ checksum = "75872d278a8f37ef87fa0ddbda7802605cb18344497949862c0d4dcb291eba60"
 dependencies = [
  "digest",
  "keccak",
-]
-
-[[package]]
-name = "shared"
-version = "6.0.0"
-dependencies = [
- "soroban-sdk",
 ]
 
 [[package]]
