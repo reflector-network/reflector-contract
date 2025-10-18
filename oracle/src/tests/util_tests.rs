@@ -1,5 +1,4 @@
 #![cfg(test)]
-extern crate alloc;
 extern crate std;
 
 use soroban_sdk::{log, Bytes, Env, Vec};

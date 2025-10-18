@@ -1,5 +1,4 @@
 #![cfg(test)]
-extern crate alloc;
 extern crate std;
 
 use crate::prices;

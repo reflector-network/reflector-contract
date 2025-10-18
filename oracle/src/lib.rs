@@ -1,6 +1,4 @@
 #![no_std]
-extern crate alloc;
-
 pub mod assets;
 pub mod auth;
 pub mod events;
