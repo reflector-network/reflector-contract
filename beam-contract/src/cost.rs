@@ -6,11 +6,13 @@ const COST_CONFIG_KEY: &str = "cost";
 const SCALE: u64 = 10_000_000;
 
 pub enum InvocationComplexity {
-    Price = 0,
-    Twap = 1,
-    CrossPrice = 2,
-    CrossTwap = 3,
+    NModifier = 0,
+    Price = 1,
+    Twap = 2,
+    CrossPrice = 3,
+    CrossTwap = 4,
 }
+//invocation cost config is stored as vector with indexes corresponding to InvocationComplexity
 
 // Update invocation costs config
 #[inline]
@@ -25,7 +27,7 @@ pub fn load_costs_config(e: &Env) -> Vec<u64> {
         .get(&COST_CONFIG_KEY)
         .unwrap_or_else(|| {
             Vec::from_array(
-                e,
+                e, // RecordsModifier, Price, Twap, CrossPrice, CrossTwap
                 [2_000_000, 10_000_000, 15_000_000, 20_000_000, 30_000_000],
             )
         })
@@ -61,14 +63,15 @@ pub fn estimate_invocation_cost(
     periods: u32,
 ) -> u64 {
     //resolve base cost based on the invocation type
-    let i = invocation as u32 + 1;
-    let mut cost = costs.get(i).unwrap_or_default();
+    let mut cost = costs.get(invocation as u32).unwrap_or_default();
     if cost < 1 {
         return 0;
     }
     //charge additional per each loaded period
     if periods > 1 {
-        let period_cost = costs.get(0).unwrap_or_default();
+        let period_cost = costs
+            .get(InvocationComplexity::NModifier as u32)
+            .unwrap_or_default();
         if period_cost > 0 {
             cost = mul_scaled(cost, SCALE + (periods - 1) as u64 * period_cost);
         }
