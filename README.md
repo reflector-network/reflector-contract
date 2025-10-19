@@ -67,47 +67,47 @@ impl MyAwesomeContract {
 
 ```rust
 /* reflector.rs */
-use soroban_sdk::{contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, Address, Symbol, Vec};
 
 // Oracle contract interface exported as ReflectorClient
 #[soroban_sdk::contractclient(name = "ReflectorClient")]
 pub trait Contract {
     // Base oracle symbol the price is reported in
-    fn base(e: Env) -> Asset;
+    fn base() -> Asset;
     // All assets quoted by the contract
-    fn assets(e: Env) -> Vec<Asset>;
+    fn assets() -> Vec<Asset>;
     // Number of decimal places used to represent price for all assets quoted by the oracle
-    fn decimals(e: Env) -> u32;
+    fn decimals() -> u32;
     // Quotes asset price in base asset at specific timestamp
-    fn price(e: Env, asset: Asset, timestamp: u64) -> Option<PriceData>;
+    fn price(asset: Asset, timestamp: u64) -> Option<PriceData>;
     // Quotes the most recent price for an asset
-    fn lastprice(e: Env, asset: Asset) -> Option<PriceData>;
+    fn lastprice(asset: Asset) -> Option<PriceData>;
     // Quotes last N price records for the given asset
-    fn prices(e: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>>;
+    fn prices(asset: Asset, records: u32) -> Option<Vec<PriceData>>;
     // Quotes the most recent cross price record for the pair of assets
-    fn x_last_price(e: Env, base_asset: Asset, quote_asset: Asset) -> Option<PriceData>;
+    fn x_last_price(base_asset: Asset, quote_asset: Asset) -> Option<PriceData>;
     // Quotes the cross price for the pair of assets at specific timestamp
-    fn x_price(e: Env, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData>;
+    fn x_price(base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData>;
     // Quotes last N cross price records of for the pair of assets
-    fn x_prices(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>>;
+    fn x_prices(base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>>;
     // Quotes the time-weighted average price for the given asset over N recent records
-    fn twap(e: Env, asset: Asset, records: u32) -> Option<i128>;
+    fn twap(asset: Asset, records: u32) -> Option<i128>;
     // Quotes the time-weighted average cross price for the given asset pair over N recent records
-    fn x_twap(e: Env, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128>;
+    fn x_twap(base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128>;
     // Price feed resolution (default tick period timeframe, in seconds - 5 minutes by default)
-    fn resolution(e: Env) -> u32;
+    fn resolution() -> u32;
     // Historical records retention period, in seconds (24 hours by default)
-    fn history_retention_period(e: Env) -> Option<u64>;
+    fn history_retention_period() -> Option<u64>;
     // The most recent price update timestamp
-    fn last_timestamp(e: Env) -> u64;
+    fn last_timestamp() -> u64;
     // Contract version
-    fn version(e: Env) -> u32;
+    fn version() -> u32;
     // Contract admin address
-    fn admin(e: Env) -> Option<Address>;
+    fn admin() -> Option<Address>;
     // Extend asset TTL (time-to-live) in the contract storage
-    fn extend_asset_ttl(e: Env, sponsor: Address, asset: Asset);
+    fn extend_asset_ttl(sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
-    fn expires(e: &Env, asset: Asset) -> Option<u64>;
+    fn expires(asset: Asset) -> Option<u64>;
 }
 
 // Quoted asset definition
@@ -151,7 +151,7 @@ pub enum Error {
 ```rust
 /* contract.rs */
 use crate::reflector::{ReflectorClient, Asset as ReflectorAsset}; // Import Reflector interface
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, symbol_short, auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation}};
 #[contract]
 pub struct MyAwesomeContract; // Of course, it's awesome, we know it!
 #[contractimpl]
@@ -163,6 +163,30 @@ impl MyAwesomeContract {
         let reflector_client = ReflectorClient::new(&e, &oracle_address);
         // Ticker to lookup the price
         let ticker = ReflectorAsset::Other(Symbol::new(&e, &("BTC")));
+        // Add fee payment auth
+        match reflector_client.fee_config() {
+            FeeConfig::Some((fee_token, _)) => {
+                let cost = reflector_client.estimate_cost(&InvocationComplexity::Price, &1);
+                let invocation = InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: fee_token.clone(),
+                        fn_name: symbol_short!("burn"),
+                        args: Vec::from_array(
+                            &env,
+                            [
+                                env.current_contract_address().to_val(),
+                                cost.into_val(&env),
+                            ],
+                        ),
+                    },
+                    sub_invocations: Vec::new(&env),
+                });
+
+                env.authorize_as_current_contract(Vec::from_array(&env, [invocation]));
+            },
+            FeeConfig::None => {},
+        };
+
         // Fetch the most recent price record for it
         let recent = reflector_client.lastprice(&env.current_contract_address(), &ticker);
         // Check the result
@@ -195,49 +219,49 @@ impl MyAwesomeContract {
 
 ```rust
 /* reflector.rs */
-use soroban_sdk::{contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, Address, Symbol, Vec};
 
 // Oracle contract interface exported as ReflectorClient
 #[soroban_sdk::contractclient(name = "ReflectorClient")]
 pub trait Contract {
     // Base oracle symbol the price is reported in
-    fn base(e: Env) -> Asset;
+    fn base() -> Asset;
     // All assets quoted by the contract
-    fn assets(e: Env) -> Vec<Asset>;
+    fn assets() -> Vec<Asset>;
     // Number of decimal places used to represent price for all assets quoted by the oracle
-    fn decimals(e: Env) -> u32;
+    fn decimals() -> u32;
     // Quotes asset price in base asset at specific timestamp
-    fn price(e: Env, caller: Address, asset: Asset, timestamp: u64) -> Option<PriceData>;
+    fn price(caller: Address, asset: Asset, timestamp: u64) -> Option<PriceData>;
     // Quotes the most recent price for an asset
-    fn lastprice(e: Env, caller: Address, asset: Asset) -> Option<PriceData>;
+    fn lastprice(caller: Address, asset: Asset) -> Option<PriceData>;
     // Quotes last N price records for the given asset
-    fn prices(e: Env, caller: Address, asset: Asset, records: u32) -> Option<Vec<PriceData>>;
+    fn prices(caller: Address, asset: Asset, records: u32) -> Option<Vec<PriceData>>;
     // Quotes the most recent cross price record for the pair of assets
-    fn x_last_price(e: Env, caller: Address, base_asset: Asset, quote_asset: Asset) -> Option<PriceData>;
+    fn x_last_price(caller: Address, base_asset: Asset, quote_asset: Asset) -> Option<PriceData>;
     // Quotes the cross price for the pair of assets at specific timestamp
-    fn x_price(e: Env, caller: Address, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData>;
+    fn x_price(caller: Address, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData>;
     // Quotes last N cross price records of for the pair of assets
-    fn x_prices(e: Env, caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>>;
+    fn x_prices(caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>>;
     // Quotes the time-weighted average price for the given asset over N recent records
-    fn twap(e: Env, caller: Address, asset: Asset, records: u32) -> Option<i128>;
+    fn twap(caller: Address, asset: Asset, records: u32) -> Option<i128>;
     // Quotes the time-weighted average cross price for the given asset pair over N recent records
-    fn x_twap(e: Env, caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128>;
+    fn x_twap(caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128>;
     // Price feed resolution (default tick period timeframe, in seconds - 5 minutes by default)
-    fn resolution(e: Env) -> u32;
+    fn resolution() -> u32;
     // Historical records retention period, in seconds (24 hours by default)
-    fn history_retention_period(e: Env) -> Option<u64>;
+    fn history_retention_period() -> Option<u64>;
     // The most recent price update timestamp
-    fn last_timestamp(e: Env) -> u64;
+    fn last_timestamp() -> u64;
     // Contract version
-    fn version(e: Env) -> u32;
+    fn version() -> u32;
     // Contract admin address
-    fn admin(e: Env) -> Option<Address>;
+    fn admin() -> Option<Address>;
     // Extend asset TTL (time-to-live) in the contract storage
-    fn extend_asset_ttl(e: Env, sponsor: Address, asset: Asset);
+    fn extend_asset_ttl(sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
-    fn expires(e: &Env, asset: Asset) -> Option<u64>;
+    fn expires(asset: Asset) -> Option<u64>;
     // Estimate invocation cost based on its complexity
-    fn estimate_cost(e: &Env, invocation: InvocationComplexity, rounds: u32) -> i128;
+    fn estimate_cost(invocation: InvocationComplexity, rounds: u32) -> i128;
 }
 
 // Quoted asset definition
