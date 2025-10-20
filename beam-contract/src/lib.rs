@@ -102,7 +102,7 @@ impl BeamOracleContract {
         PriceOracleContractBase::expires(e, asset)
     }
 
-    // Extends the asset expiration date by a given amount of tokens.
+    // Extends asset expiration date by a given amount of tokens.
     //
     // # Arguments
     //
@@ -112,12 +112,12 @@ impl BeamOracleContract {
     //
     // # Panics
     //
-    // Panics if the asset is not supported or if retention config is malformed/missing
+    // Panics if asset is not supported or if retention config is malformed/missing
     pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
         PriceOracleContractBase::extend_asset_ttl(e, sponsor, asset, amount, 0);
     }
 
-    // Return the fee token address daily price feed retainer fee amount
+    // Return fee token address daily price feed retainer fee amount
     //
     // # Returns
     //
@@ -137,12 +137,17 @@ impl BeamOracleContract {
 
     // Estimate invocation cost based on its complexity
     //
+    // # Arguments
+    //
+    // * `invocation` - Invocation type (single price check, cross-price, TWAP, etc.)
+    // * `periods` - Number of requested history periods
+    //
     // # Returns
     //
-    // Amount of fee tokens required to pay for the call
-    pub fn estimate_cost(e: &Env, invocation: InvocationComplexity, rounds: u32) -> i128 {
+    // Amount of fee tokens required to pay for invocation
+    pub fn estimate_cost(e: &Env, invocation: InvocationComplexity, periods: u32) -> i128 {
         let fee_config = settings::get_fee_config(e);
-        cost::estimate_invocation_cost(e, invocation, rounds, fee_config)
+        cost::estimate_invocation_cost(e, invocation, periods, fee_config)
     }
 
     // Return contract admin address
