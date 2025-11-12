@@ -1,20 +1,61 @@
-name: Rust
+name: "Check PR"
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
-  fmt:
+  Check_Format:
+    name: "Check Formatting"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update
-      - run: cargo fmt --check
+      - name: Install mise
+        uses: jdx/mise-action@v2
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@v2.7.3
+      - name: "Check Format"
+        run: cargo fmt --check
 
-  test:
+  Check_Lint:
+    name: "Check Linting"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update
-      - run: cargo test
+      - name: Install mise
+        uses: jdx/mise-action@v2
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@v2.7.3
+      - name: "Run Clippy"
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  Check_Build:
+    name: "Check Build"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mise
+        uses: jdx/mise-action@v2
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@v2.7.3
+      - name: "Build Contract (Optimized)"
+        run: cargo build --locked --profile release --target wasm32-unknown-unknown
+
+  Check_Tests:
+    name: "Run Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mise
+        uses: jdx/mise-action@v2
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@v2.7.3
+      - name: "Run All Tests"
+        run: cargo test --lib --verbose

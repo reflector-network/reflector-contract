@@ -6,7 +6,7 @@ mod types;
 
 use extensions::i128_extensions::I128Extensions;
 use extensions::{env_extensions::EnvExtensions, u64_extensions::U64Extensions};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec, contract, contractimpl, panic_with_error};
 use types::asset::Asset;
 use types::error::Error;
 use types::{config_data::ConfigData, price_data::PriceData};
@@ -299,8 +299,8 @@ impl PriceOracleContract {
         e.set_decimals(config.decimals);
         e.set_resolution(config.resolution);
         e.set_retention_period(config.period);
-
-        Self::__add_assets(&e, config.assets);
+        e.set_fx_oracle_address(&config.fx_oracle_address);
+        e.set_max_yield_deviation(config.max_yield_deviation_percent);
     }
 
     // Adds given assets to the contract quoted assets list. Can be invoked only by the admin account.
@@ -314,9 +314,13 @@ impl PriceOracleContract {
     // # Panics
     //
     // Panics if the caller doesn't match admin address, or if the assets are already added
-    pub fn add_assets(e: Env, assets: Vec<Asset>) {
+    pub fn add_assets(e: Env, assets: Vec<Asset>, fxs: Vec<Symbol>) {
         e.panic_if_not_admin();
+        if assets.len() != fxs.len() {
+            panic_with_error!(&e, Error::FxArrayLengthMismatch);
+        }
         Self::__add_assets(&e, assets);
+        Self::__add_fxs(&e, fxs);
     }
 
     // Sets history retention period for the prices. Can be invoked only by the admin account.
@@ -368,6 +372,13 @@ impl PriceOracleContract {
         //get the last timestamp
         let last_timestamp = e.get_last_timestamp();
 
+        //validate array lengths match
+        let fxs = e.get_fxs();
+        let assets = e.get_assets();
+        if fxs.len() != updates_len || updates_len != assets.len() {
+            panic_with_error!(&e, Error::FxArrayLengthMismatch);
+        }
+
         //iterate over the updates
         for (i, price) in updates.iter().enumerate() {
             //don't store zero prices
@@ -375,8 +386,10 @@ impl PriceOracleContract {
                 continue;
             }
             let asset = i as u8;
+            let fx = fxs.get(i as u32).unwrap();
+
             //store the new price
-            e.set_price(asset, price, timestamp, ledgers_to_live);
+            e.set_price(asset, fx, price, timestamp, ledgers_to_live);
         }
         if timestamp > last_timestamp {
             e.set_last_timestamp(timestamp);
@@ -412,6 +425,22 @@ impl PriceOracleContract {
             panic_with_error!(&e, Error::AssetLimitExceeded);
         }
         e.set_assets(current_assets);
+    }
+
+    fn __add_fxs(e: &Env, fxs: Vec<Symbol>) {
+        let mut current_fxs = e.get_fxs();
+        for fx in fxs.iter() {
+            //check if the fx has been already added
+            if e.get_fx_index(&fx).is_some() {
+                panic_with_error!(&e, Error::FxAlreadyExists);
+            }
+            e.set_fx_index(&fx, current_fxs.len());
+            current_fxs.push_back(fx);
+        }
+        if current_fxs.len() >= 256 {
+            panic_with_error!(&e, Error::FxLimitExceeded);
+        }
+        e.set_fxs(current_fxs);
     }
 }
 
