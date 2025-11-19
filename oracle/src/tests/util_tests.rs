@@ -19,31 +19,39 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
 }
 
 #[test]
-fn fixed_div_floor_tests() {
+fn fixed_div_floor_failed_tests() {
     let test_cases = [
-        (154467226919499, 133928752749774, 115335373284703),
+        (1, 0, 14),
+        (0, 1, 14),
+        (0, 0, 14),
+        (-1, 0, 14),
+        (0, -1, 14),
+        (-1, -1, 14),
+        (1000000000000000000000, 5, 18),
+    ];
+
+    for (a, b, decimals) in test_cases.iter() {
+        let result = prices::fixed_div_floor(a.clone(), *b, *decimals);
+        assert!(result.is_none());
+    }
+}
+
+#[test]
+fn fixed_div_floor_success_tests() {
+    let test_cases = [
+        (154467226919499, 133928752749774, 14, 115335373284703),
         (
             i128::MAX / 100,
             231731687303715884105728,
+            14,
             734216306110962248249052545,
         ),
-        (231731687303715884105728, i128::MAX / 100, 13),
-        // -1 expected result for errors
-        (1, 0, -1),
-        (0, 1, -1),
-        (0, 0, -1),
-        (-1, 0, -1),
-        (0, -1, -1),
-        (-1, -1, -1),
+        (231731687303715884105728, i128::MAX / 100, 14, 13),
     ];
 
-    for (a, b, expected) in test_cases.iter() {
-        let result = prices::fixed_div_floor(a.clone(), *b, 14);
-        if expected == &-1 {
-            assert!(result.is_none());
-        } else {
-            assert_eq!(result.unwrap(), *expected);
-        }
+    for (a, b, decimals, expected) in test_cases.iter() {
+        let result = prices::fixed_div_floor(a.clone(), *b, *decimals);
+        assert_eq!(result.unwrap(), *expected);
     }
 }
 

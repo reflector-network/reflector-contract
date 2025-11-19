@@ -341,5 +341,8 @@ pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> Option<i
     if bshift > 0 {
         vdivisor /= 10_i128.pow(bshift);
     }
+    if vdivisor <= 0 {
+        return None;
+    }
     Some(vdividend / vdivisor)
 }
