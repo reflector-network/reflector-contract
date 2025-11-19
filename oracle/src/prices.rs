@@ -336,7 +336,11 @@ pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> Option<i
     let mut vdividend = dividend;
     let mut vdivisor = divisor;
     if ashift > 0 {
-        vdividend *= 10_i128.pow(ashift);
+        let svdividend = vdividend.checked_mul(10_i128.pow(ashift));
+        if svdividend.is_none() {
+            return None;
+        }
+        vdividend = svdividend?;
     }
     if bshift > 0 {
         vdivisor /= 10_i128.pow(bshift);

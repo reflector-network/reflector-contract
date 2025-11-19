@@ -26,6 +26,7 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
 #[test_case(0, -1i128, 14)]
 #[test_case(-1, -1, 14)]
 #[test_case(1000000000000000000000, 5, 18)]
+#[test_case(5000000000000000000000000000000, 10000000000, 14)]
 #[test_case(i128::MAX, 1, 14)]
 fn fixed_div_floor_failed_tests(a: i128, b: i128, decimals: u32) {
     let result = prices::fixed_div_floor(a.clone(), b, decimals);
