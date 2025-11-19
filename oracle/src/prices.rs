@@ -278,10 +278,11 @@ pub fn load_cross_price(
     let quote_asset_price = retrieve_asset_price_data(e, quote_asset, timestamp)?;
 
     //calculate the cross price
-    Some(normalize_price_data(
-        fixed_div_floor(base_asset_price.price, quote_asset_price.price, decimals),
-        timestamp,
-    ))
+    let price = fixed_div_floor(base_asset_price.price, quote_asset_price.price, decimals);
+    if price.is_none() {
+        return None;
+    }
+    Some(normalize_price_data(price.unwrap(), timestamp))
 }
 
 // Get cached records from the instance storage
@@ -325,9 +326,9 @@ fn format_price_key_v1(asset: u8, timestamp: u64) -> u128 {
 }
 
 // Div+floor with a specified precision
-pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
+pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> Option<i128> {
     if dividend <= 0 || divisor <= 0 {
-        panic!("invalid division arguments")
+        return None;
     }
     let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
     let bshift = core::cmp::max(decimals - ashift, 0);
@@ -340,5 +341,5 @@ pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> i128 {
     if bshift > 0 {
         vdivisor /= 10_i128.pow(bshift);
     }
-    vdividend / vdivisor
+    Some(vdividend / vdivisor)
 }

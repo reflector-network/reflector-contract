@@ -4,7 +4,6 @@ extern crate std;
 use soroban_sdk::{log, Bytes, Env, Vec};
 
 use crate::{mapping, prices};
-use std::panic::{self, AssertUnwindSafe};
 
 fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
@@ -39,11 +38,9 @@ fn fixed_div_floor_tests() {
     ];
 
     for (a, b, expected) in test_cases.iter() {
-        let result = panic::catch_unwind(AssertUnwindSafe(|| {
-            prices::fixed_div_floor(a.clone(), *b, 14)
-        }));
+        let result = prices::fixed_div_floor(a.clone(), *b, 14);
         if expected == &-1 {
-            assert!(result.is_err());
+            assert!(result.is_none());
         } else {
             assert_eq!(result.unwrap(), *expected);
         }
