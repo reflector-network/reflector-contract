@@ -413,6 +413,9 @@ impl PriceOracleContractBase {
     // Panics if not authorized or not initialized yet
     pub fn set_fee_config(e: &Env, fee_config: FeeConfig, initial_expiration_period: u32) {
         auth::panic_if_not_admin(e);
+        if fee_config == FeeConfig::None {
+            e.panic_with_error(Error::InvalidConfig); //prevent using empty fee config
+        }
         settings::set_fee_config(e, &fee_config);
         assets::init_expiration_config(e, initial_expiration_period);
     }
