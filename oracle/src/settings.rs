@@ -82,6 +82,9 @@ pub fn set_cache_size(e: &Env, cache_size: u32) {
 
 #[inline]
 pub fn set_fee_config(e: &Env, fee_config: &FeeConfig) {
+    if fee_config == &FeeConfig::None {
+        e.panic_with_error(Error::InvalidConfig); //prevent using empty fee config
+    }
     e.storage().instance().set(&RETENTION_KEY, &fee_config);
 }
 

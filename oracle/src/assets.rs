@@ -127,12 +127,12 @@ pub fn extend_ttl(
     let (xrf, fee) = match settings::get_fee_config(e) {
         FeeConfig::Some(fee_data) => {
             if fee_data.1 <= 0 {
-                e.panic_with_error(Error::InvalidConfigVersion);
+                e.panic_with_error(Error::InvalidConfig);
             }
             fee_data
         }
         FeeConfig::None => {
-            e.panic_with_error(Error::InvalidConfigVersion);
+            e.panic_with_error(Error::InvalidConfig);
         }
     };
     //burn corresponding amount of fee tokens
