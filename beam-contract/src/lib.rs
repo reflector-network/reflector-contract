@@ -4,7 +4,7 @@ mod tests;
 
 use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
 use oracle::price_oracle::PriceOracleContractBase;
-use oracle::settings;
+use oracle::{auth, settings};
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
@@ -401,7 +401,8 @@ impl BeamOracleContract {
     // # Panics
     //
     // Panics if not authorized or not initialized yet
-    pub fn set_invocation_costs_config(e: &Env, config: Vec<u64>) {
+        pub fn set_invocation_costs_config(e: &Env, config: Vec<u64>) {
+        auth::panic_if_not_admin(e);
         set_costs_config(e, &config);
     }
 
