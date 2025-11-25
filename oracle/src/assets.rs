@@ -57,7 +57,6 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     //load current state
     let mut asset_list = load_all_assets(e);
     let mut expiration = load_expiration_records(e);
-    let is_fee_config_set = settings::get_fee_config(e) != FeeConfig::None;
     //for each new asset
     for asset in assets.iter() {
         //check if the asset has been already added
@@ -66,10 +65,8 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
         }
         set_asset_index(e, &asset, asset_list.len());
         asset_list.push_back(asset);
-        //if the fee is not set, we don't need to set the expiration
-        if is_fee_config_set && expiration_timestamp > 0 {
-            expiration.push_back(expiration_timestamp); //set expiration
-        }
+        //update expiration records
+        expiration.push_back(expiration_timestamp);
     }
     if asset_list.len() >= ASSET_LIMIT {
         panic_with_error!(&e, Error::AssetLimitExceeded);
