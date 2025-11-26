@@ -96,13 +96,16 @@ impl PriceOracleContractBase {
     //
     // # Returns
     //
-    // Asset expiration timestamp or None if asset is not supported
+    // Asset expiration timestamp (in seconds) or None if asset is not supported
     //
     // # Panics
     //
     // Panics if asset is not supported
     pub fn expires(e: &Env, asset: Asset) -> Option<u64> {
-        assets::expires(e, asset)
+        match assets::expires(e, asset) {
+            Some(ts) => Some(ts / 1000), //convert to seconds
+            None => None,
+        }
     }
 
     // Extends the asset expiration date by a given amount of tokens.
@@ -325,8 +328,8 @@ impl PriceOracleContractBase {
     // * `admin` - Admin address
     // * `base` - Base asset
     // * `decimals` - Number of decimals for price records
-    // * `resolution` - History timeframe resolution (in seconds)
-    // * `history_retention_period` - Price history retention period (in seconds)
+    // * `resolution` - History timeframe resolution (in milliseconds)
+    // * `history_retention_period` - Price history retention period (in milliseconds)
     // * `cache_size` - Number of rounds held in instance cache
     // * `fee_config` - Contract retention config
     // * `assets` - Initial list of supported assets
@@ -390,7 +393,7 @@ impl PriceOracleContractBase {
     //
     // # Arguments
     //
-    // * `period` - History retention period (in seconds)
+    // * `period` - History retention period (in milliseconds)
     //
     // # Panics
     //

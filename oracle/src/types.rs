@@ -14,7 +14,7 @@ pub enum Asset {
 pub struct ConfigData {
     // Admin address
     pub admin: Address,
-    // Price history retention period
+    // Price history retention period (in milliseconds)
     pub history_retention_period: u64,
     // List of supported assets
     pub assets: Vec<Asset>,
@@ -22,7 +22,7 @@ pub struct ConfigData {
     pub base_asset: Asset,
     // Number of decimals for price records
     pub decimals: u32,
-    // History timeframe resolution
+    // History timeframe resolution (in milliseconds)
     pub resolution: u32,
     // Number of rounds held in instance cache
     pub cache_size: u32,

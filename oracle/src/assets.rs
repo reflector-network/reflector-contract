@@ -79,7 +79,7 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     set_expirations_records(e, &expiration);
 }
 
-// Retrieve expiration time for given asset
+// Retrieve expiration timestamp for given asset
 pub fn expires(e: &Env, asset: Asset) -> Option<u64> {
     let asset_index = resolve_asset_index(e, &asset);
     if asset_index.is_none() {
