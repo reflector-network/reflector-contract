@@ -3,6 +3,7 @@ extern crate std;
 
 use crate::cost::InvocationComplexity;
 use crate::{BeamOracleContract, BeamOracleContractClient};
+use oracle::assets;
 use oracle::types::{Asset, ConfigData, FeeConfig};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
@@ -122,4 +123,41 @@ fn invocation_charge_estimate_test(
 
     let fee = client.estimate_cost(&invocation, &periods);
     assert_eq!(fee, expected_fee);
+}
+
+#[test]
+fn check_extending_asset_ttl() {
+    //initialize contract
+    let (env, client, init_data) = init_contract_with_admin();
+
+    //set fee config
+    let asset_contract = env.register_stellar_asset_contract_v2(init_data.admin.clone());
+    let fee_asset = asset_contract.address();
+    let fee_config = FeeConfig::Some((fee_asset.clone(), 1_000_000));
+    client.set_fee_config(&fee_config);
+
+    //add new asset to the oracle
+    let new_asset = Asset::Stellar(Address::generate(&env));
+    let mut new_assets = Vec::new(&env);
+    new_assets.push_back(new_asset.clone());
+    client.add_assets(&new_assets);
+
+    //check that expiration is set for the new asset
+    let exp = client.expires(&new_asset);
+    assert_ne!(exp, None, "Expected expiration to be set for the new asset");
+
+    //extend TTL for the new asset
+    let sponsor = Address::generate(&env);
+    let token_client = StellarAssetClient::new(&env, &fee_asset);
+    token_client.mint(&sponsor, &10_000_000);
+
+    //check the extending
+    client.extend_asset_ttl(&sponsor, &new_asset, &1_000_000);
+    assert_eq!(client.expires(&new_asset), Some(87_300_000));
+
+    //check that expiration records length matches assets length
+    env.as_contract(&client.address, || {
+        let expiration: Vec<u64> = env.storage().instance().get(&"expiration").unwrap();
+        assert_eq!(assets::load_all_assets(&env).len(), expiration.len());
+    });
 }
