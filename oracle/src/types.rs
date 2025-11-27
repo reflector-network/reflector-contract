@@ -68,10 +68,10 @@ pub enum Error {
     Unauthorized = 1,
     // Config asset list doesn't contain persistent asset
     AssetMissing = 2,
-    // Asset is already exists in supported assets list
+    // Asset already exists in supported assets list
     AssetAlreadyExists = 3,
-    // Config version is invalid
-    InvalidConfigVersion = 4,
+    // Config is invalid
+    InvalidConfig = 4,
     // Price timestamp is invalid
     InvalidTimestamp = 5,
     // Maximum assets limit reached
