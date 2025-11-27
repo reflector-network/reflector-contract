@@ -6,8 +6,9 @@ use crate::tests::setup_tests::{
 };
 use oracle::prices;
 use oracle::types::FeeConfig;
-use soroban_sdk::testutils::{Ledger, LedgerInfo};
-use soroban_sdk::Vec;
+use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::token::StellarAssetClient;
+use soroban_sdk::{Address, Vec};
 
 #[test]
 fn version_test() {
@@ -129,4 +130,33 @@ fn prices_test() {
     }
     assert!(had_prices);
     assert!(had_gaps);
+}
+
+#[test]
+fn extend_asset_ttl_test() {
+    let (env, client, init_data) = init_contract();
+
+    env.mock_all_auths();
+
+    let fee_asset = env
+        .register_stellar_asset_contract_v2(init_data.admin.clone())
+        .address();
+    let fee_config = FeeConfig::Some((fee_asset.clone(), 1_000_000));
+    client.set_fee_config(&fee_config);
+
+    //generate sponsor and mint fee tokens
+    let sponsor = Address::generate(&env);
+    let token_client = StellarAssetClient::new(&env, &fee_asset);
+    token_client.mint(&sponsor, &10_000_000);
+
+    //get initial expiration
+    let asset = &init_data.assets.first_unchecked();
+    let initial_expiration = client.expires(&asset).unwrap();
+
+    //extend TTL by 10 day (864000 seconds)
+    client.extend_asset_ttl(&sponsor, &asset, &10_000_000);
+
+    //verify new expiration
+    let new_expiration = client.expires(&asset).unwrap();
+    assert_eq!(new_expiration, initial_expiration + 864000);
 }

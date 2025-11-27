@@ -311,7 +311,7 @@ impl PulseOracleContract {
     //
     // # Arguments
     //
-    // * `period` - History retention period (in seconds)
+    // * `period` - History retention period (in milliseconds)
     //
     // # Panics
     //
@@ -340,7 +340,7 @@ impl PulseOracleContract {
     // # Arguments
     //
     // * `updates` - Price feed snapshot
-    // * `timestamp` - History snapshot timestamp
+    // * `timestamp` - History snapshot timestamp (in milliseconds)
     //
     // # Panics
     //

@@ -233,10 +233,13 @@ fn set_fee_config_test() {
     fee_token.mint(&sponsor, &10);
 
     let symbol_expires = client.expires(&asset).unwrap();
-    assert_eq!(symbol_expires, 15552900000); // 900s current ledger timestamp + 180 days of initial expiration period
+    assert_eq!(symbol_expires, 15552900); // 900s current ledger timestamp + 180 days of initial expiration period
     client.extend_asset_ttl(&sponsor, &asset, &10);
     //123428571 ms you get for 10 XRF tokens
-    assert_eq!(client.expires(&asset).unwrap(), symbol_expires + 123428571);
+    assert_eq!(
+        client.expires(&asset).unwrap(),
+        symbol_expires + 123428571 / 1000
+    );
 
     let fee_token_balance = TokenClient::new(&env, &fee_asset.address()).balance(&sponsor);
     assert_eq!(fee_token_balance, 0);

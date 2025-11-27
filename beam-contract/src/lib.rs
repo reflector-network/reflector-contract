@@ -93,7 +93,7 @@ impl BeamOracleContract {
     //
     // # Returns
     //
-    // Asset expiration timestamp or None if asset is not supported
+    // Asset expiration timestamp (in seconds) or None if asset is not supported
     //
     // # Panics
     //
@@ -368,7 +368,7 @@ impl BeamOracleContract {
     //
     // # Arguments
     //
-    // * `period` - History retention period (in seconds)
+    // * `period` - History retention period (in milliseconds)
     //
     // # Panics
     //
