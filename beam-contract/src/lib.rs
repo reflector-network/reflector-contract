@@ -292,7 +292,7 @@ impl BeamOracleContract {
     // TWAP for the given asset over N recent records or None if asset is not supported
     pub fn twap(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<i128> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::Twap, 1);
+        charge_invocation_fee(e, &caller, InvocationComplexity::Twap, records);
         PriceOracleContractBase::twap(e, asset, records)
     }
 
