@@ -2,9 +2,9 @@
 extern crate std;
 
 use soroban_sdk::{log, Bytes, Env, Vec};
+use test_case::test_case;
 
 use crate::{mapping, prices};
-use std::panic::{self, AssertUnwindSafe};
 
 fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
@@ -19,35 +19,27 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     Bytes::from_array(e, &mask)
 }
 
-#[test]
-fn fixed_div_floor_tests() {
-    let test_cases = [
-        (154467226919499, 133928752749774, 115335373284703),
-        (
-            i128::MAX / 100,
-            231731687303715884105728,
-            734216306110962248249052545,
-        ),
-        (231731687303715884105728, i128::MAX / 100, 13),
-        // -1 expected result for errors
-        (1, 0, -1),
-        (0, 1, -1),
-        (0, 0, -1),
-        (-1, 0, -1),
-        (0, -1, -1),
-        (-1, -1, -1),
-    ];
+#[test_case(1, 0, 14)]
+#[test_case(0, 1, 14)]
+#[test_case(0, 0, 14)]
+#[test_case(-1i128, 0, 14)]
+#[test_case(0, -1i128, 14)]
+#[test_case(-1, -1, 14)]
+#[test_case(1000000000000000000000, 5, 18)]
+#[test_case(5000000000000000000000000000000, 10000000000, 14)]
+#[test_case(i128::MAX, 1, 14)]
+fn fixed_div_floor_failed_tests(a: i128, b: i128, decimals: u32) {
+    let result = prices::fixed_div_floor(a.clone(), b, decimals);
+    assert!(result.is_none());
+}
 
-    for (a, b, expected) in test_cases.iter() {
-        let result = panic::catch_unwind(AssertUnwindSafe(|| {
-            prices::fixed_div_floor(a.clone(), *b, 14)
-        }));
-        if expected == &-1 {
-            assert!(result.is_err());
-        } else {
-            assert_eq!(result.unwrap(), *expected);
-        }
-    }
+#[test_case(154467226919499, 133928752749774, 14, 115335373284703)]
+#[test_case(i128::MAX / 100, 231731687303715884105728, 14, 734216306110962248249052545)]
+#[test_case(231731687303715884105728, i128::MAX / 100, 14, 13)]
+#[test_case(i128::MAX, i128::MAX, 14, 100000000000000)]
+fn fixed_div_floor_success_tests(a: i128, b: i128, decimals: u32, expected: i128) {
+    let result = prices::fixed_div_floor(a.clone(), b, decimals);
+    assert_eq!(result.unwrap(), expected);
 }
 
 #[test]
