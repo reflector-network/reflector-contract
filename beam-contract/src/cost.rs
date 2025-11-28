@@ -1,5 +1,5 @@
-use oracle::settings;
 use oracle::types::FeeConfig;
+use oracle::{prices::PRICE_RECORDS_LIMIT, settings};
 use soroban_sdk::{contracttype, token, Address, Env, Vec};
 
 const COST_CONFIG_KEY: &str = "cost";
@@ -69,6 +69,9 @@ pub fn estimate_invocation_cost(
     periods: u32,
     fee_config: FeeConfig,
 ) -> i128 {
+    if periods > PRICE_RECORDS_LIMIT {
+        return 0;
+    }
     match fee_config {
         FeeConfig::None => 0,
         FeeConfig::Some(_) => {

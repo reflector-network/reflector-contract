@@ -103,6 +103,7 @@ fn invocation_charge_test() {
 #[test_case(InvocationComplexity::Twap, 5, 27_000_000 ; "multi round twap")]
 #[test_case(InvocationComplexity::CrossPrice, 2, 24_000_000 ; "multi round cross price")]
 #[test_case(InvocationComplexity::CrossTwap, 7, 66_000_000 ; "multi round cross twap")]
+#[test_case(InvocationComplexity::Price, 21, 0 ; "multi round price exceeding limit")]
 fn invocation_charge_estimate_test(
     invocation: InvocationComplexity,
     periods: u32,
@@ -153,7 +154,7 @@ fn check_extending_asset_ttl() {
 
     //check the extending
     client.extend_asset_ttl(&sponsor, &new_asset, &1_000_000);
-    assert_eq!(client.expires(&new_asset), Some(87_300_000));
+    assert_eq!(client.expires(&new_asset), Some(87_300));
 
     //check that expiration records length matches assets length
     env.as_contract(&client.address, || {

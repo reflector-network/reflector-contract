@@ -4,6 +4,7 @@ mod tests;
 
 use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
 use oracle::price_oracle::PriceOracleContractBase;
+use oracle::prices::PRICE_RECORDS_LIMIT;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use oracle::{auth, settings};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
@@ -316,6 +317,7 @@ impl BeamOracleContract {
         records: u32,
     ) -> Option<i128> {
         caller.require_auth();
+        let records = records.min(PRICE_RECORDS_LIMIT);
         charge_invocation_fee(e, &caller, InvocationComplexity::CrossTwap, records);
         PriceOracleContractBase::x_twap(e, base_asset, quote_asset, records)
     }
