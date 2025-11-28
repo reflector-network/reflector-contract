@@ -4,7 +4,6 @@ mod tests;
 
 use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
 use oracle::price_oracle::PriceOracleContractBase;
-use oracle::prices::PRICE_RECORDS_LIMIT;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use oracle::{auth, settings};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
@@ -206,8 +205,11 @@ impl BeamOracleContract {
     // Prices for given asset or None if asset is not supported
     pub fn prices(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::Price, records);
-        PriceOracleContractBase::prices(e, asset, records)
+        let res = PriceOracleContractBase::prices(e, asset, records);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::Price, records);
+        }
+        res
     }
 
     // Returns most recent cross price record for pair of assets
@@ -276,8 +278,11 @@ impl BeamOracleContract {
         records: u32,
     ) -> Option<Vec<PriceData>> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, records);
-        PriceOracleContractBase::x_prices(e, base_asset, quote_asset, records)
+        let res = PriceOracleContractBase::x_prices(e, base_asset, quote_asset, records);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, records);
+        }
+        res
     }
 
     // Returns time-weighted average price for given asset over N recent records
@@ -293,8 +298,11 @@ impl BeamOracleContract {
     // TWAP for the given asset over N recent records or None if asset is not supported
     pub fn twap(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<i128> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::Twap, records);
-        PriceOracleContractBase::twap(e, asset, records)
+        let res = PriceOracleContractBase::twap(e, asset, records);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::Twap, records);
+        }
+        res
     }
 
     // Returns time-weighted average cross price for given asset pair over N recent records
@@ -317,9 +325,11 @@ impl BeamOracleContract {
         records: u32,
     ) -> Option<i128> {
         caller.require_auth();
-        let records = records.min(PRICE_RECORDS_LIMIT);
-        charge_invocation_fee(e, &caller, InvocationComplexity::CrossTwap, records);
-        PriceOracleContractBase::x_twap(e, base_asset, quote_asset, records)
+        let res = PriceOracleContractBase::x_twap(e, base_asset, quote_asset, records);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::CrossTwap, records);
+        }
+        res
     }
 
     /* Admin section */

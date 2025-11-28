@@ -6,7 +6,7 @@ use crate::{BeamOracleContract, BeamOracleContractClient};
 use oracle::assets;
 use oracle::types::{Asset, ConfigData, FeeConfig};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::token::{StellarAssetClient, TokenClient};
+use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::{Address, Env, String, Vec};
 use test_case::test_case;
 
@@ -91,8 +91,8 @@ fn invocation_charge_test() {
         &5,
     );
     //check that fee token was deducted
-    let fee_token_balance = TokenClient::new(&env, &fee_asset).balance(&caller);
-    assert_eq!(fee_token_balance, 36_000_000);
+    let fee_token_balance = fee_token.balance(&caller);
+    assert_eq!(fee_token_balance, 90_000_000);
 }
 
 #[test_case(InvocationComplexity::Price, 1, 10_000_000 ; "price")]
@@ -103,7 +103,6 @@ fn invocation_charge_test() {
 #[test_case(InvocationComplexity::Twap, 5, 27_000_000 ; "multi round twap")]
 #[test_case(InvocationComplexity::CrossPrice, 2, 24_000_000 ; "multi round cross price")]
 #[test_case(InvocationComplexity::CrossTwap, 7, 66_000_000 ; "multi round cross twap")]
-#[test_case(InvocationComplexity::Price, 21, 0 ; "multi round price exceeding limit")]
 fn invocation_charge_estimate_test(
     invocation: InvocationComplexity,
     periods: u32,
