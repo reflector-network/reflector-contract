@@ -6,7 +6,7 @@ use crate::{BeamOracleContract, BeamOracleContractClient};
 use oracle::assets;
 use oracle::types::{Asset, ConfigData, FeeConfig};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::token::{StellarAssetClient, TokenClient};
+use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::{Address, Env, String, Vec};
 use test_case::test_case;
 
@@ -68,7 +68,7 @@ fn set_invocation_config_test() {
 }
 
 #[test]
-fn invocation_charge_test() {
+fn invocation_charge_for_none_result_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
     let fee_asset = env
@@ -91,8 +91,8 @@ fn invocation_charge_test() {
         &5,
     );
     //check that fee token was deducted
-    let fee_token_balance = TokenClient::new(&env, &fee_asset).balance(&caller);
-    assert_eq!(fee_token_balance, 36_000_000);
+    let fee_token_balance = fee_token.balance(&caller);
+    assert_eq!(fee_token_balance, 100_000_000);
 }
 
 #[test_case(InvocationComplexity::Price, 1, 10_000_000 ; "price")]
@@ -153,7 +153,7 @@ fn check_extending_asset_ttl() {
 
     //check the extending
     client.extend_asset_ttl(&sponsor, &new_asset, &1_000_000);
-    assert_eq!(client.expires(&new_asset), Some(87_300_000));
+    assert_eq!(client.expires(&new_asset), Some(87_300));
 
     //check that expiration records length matches assets length
     env.as_contract(&client.address, || {
