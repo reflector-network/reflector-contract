@@ -172,8 +172,11 @@ impl BeamOracleContract {
     // Price record for given asset at given timestamp or None if not found
     pub fn price(e: &Env, caller: Address, asset: Asset, timestamp: u64) -> Option<PriceData> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
-        PriceOracleContractBase::price(e, asset, timestamp)
+        let res = PriceOracleContractBase::price(e, asset, timestamp);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
+        }
+        res
     }
 
     // Returns most recent price for an asset
@@ -188,8 +191,11 @@ impl BeamOracleContract {
     // Most recent price for given asset or None if asset is not supported
     pub fn lastprice(e: &Env, caller: Address, asset: Asset) -> Option<PriceData> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
-        PriceOracleContractBase::lastprice(e, asset)
+        let res = PriceOracleContractBase::lastprice(e, asset);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
+        }
+        res
     }
 
     // Return last N price records for given asset
@@ -230,8 +236,11 @@ impl BeamOracleContract {
         quote_asset: Asset,
     ) -> Option<PriceData> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
-        PriceOracleContractBase::x_last_price(e, base_asset, quote_asset)
+        let res = PriceOracleContractBase::x_last_price(e, base_asset, quote_asset);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
+        }
+        res
     }
 
     // Return cross price for pair of assets at specific timestamp
@@ -254,8 +263,11 @@ impl BeamOracleContract {
         timestamp: u64,
     ) -> Option<PriceData> {
         caller.require_auth();
-        charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
-        PriceOracleContractBase::x_price(e, base_asset, quote_asset, timestamp)
+        let res = PriceOracleContractBase::x_price(e, base_asset, quote_asset, timestamp);
+        if res.is_some() {
+            charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
+        }
+        res
     }
 
     // Returns last N cross price records of for pair of assets

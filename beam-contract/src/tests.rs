@@ -68,7 +68,7 @@ fn set_invocation_config_test() {
 }
 
 #[test]
-fn invocation_charge_test() {
+fn invocation_charge_for_none_result_test() {
     let (env, client, init_data) = init_contract_with_admin();
 
     let fee_asset = env
@@ -92,7 +92,7 @@ fn invocation_charge_test() {
     );
     //check that fee token was deducted
     let fee_token_balance = fee_token.balance(&caller);
-    assert_eq!(fee_token_balance, 90_000_000);
+    assert_eq!(fee_token_balance, 100_000_000);
 }
 
 #[test_case(InvocationComplexity::Price, 1, 10_000_000 ; "price")]
