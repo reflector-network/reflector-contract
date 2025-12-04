@@ -23,11 +23,7 @@ fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     Bytes::from_array(e, &mask)
 }
 
-fn generate_updates(
-    env: &Env,
-    assets: &Vec<types::Asset>,
-    price: i128,
-) -> types::PriceUpdate {
+fn generate_updates(env: &Env, assets: &Vec<types::Asset>, price: i128) -> types::PriceUpdate {
     let mut updates = Vec::new(&env);
     for _ in assets.iter() {
         updates.push_back(price);
