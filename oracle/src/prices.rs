@@ -6,6 +6,8 @@ const CACHE_KEY: &str = "cache";
 const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
 const HISTORY_KEY: &str = "history";
 
+const MAX_PREV_PRICE_DEPTH: u32 = 5;
+
 pub const PRICE_RECORDS_LIMIT: u32 = 20; //max number of records to return
 
 fn normalize_price_data(price: i128, timestamp: u64) -> PriceData {
@@ -218,15 +220,21 @@ pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
         return None;
     }
 
-    for _ in 0..records {
+    let mut records_to_load: i32 = records as i32;
+    while records_to_load >= (MAX_PREV_PRICE_DEPTH as i32 * -1) {
         //invoke price fetch callback for each record
         if let Some(price) = get_price_fn(timestamp) {
             prices.push_back(price);
+            if records_to_load <= 1 {
+                //loaded final record
+                break;
+            }
         }
         if timestamp < resolution {
             break;
         }
         timestamp -= resolution;
+        records_to_load -= 1;
     }
 
     if prices.is_empty() {
