@@ -13,7 +13,7 @@ use test_case::test_case;
 #[test_case(900_001 ; "invalid aligned timestamp")]
 #[test_case(600_000 ; "valid timestamp same as last")]
 #[test_case(300_000 ; "valid timestamp less than last")]
-fn invalid_timestemp_update_test(ts: u64) {
+fn invalid_timestamp_update_test(ts: u64) {
     let e = Env::default();
     //register contract to have storage available
     let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
