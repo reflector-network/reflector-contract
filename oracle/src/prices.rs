@@ -162,12 +162,8 @@ pub fn load_history_record(e: &Env, timestamp: u64) -> Option<PriceUpdate> {
 
 // Update prices stored in the oracle
 pub fn store_prices(e: &Env, update: &PriceUpdate, timestamp: u64, update_v1: &Vec<i128>) {
-    //get the last timestamp
-    let last_timestamp = get_last_timestamp(e);
     //update the last timestamp
-    if timestamp > last_timestamp {
-        set_last_timestamp(e, timestamp);
-    }
+    set_last_timestamp(e, timestamp);
 
     //set the price
     let temps_storage = e.storage().temporary();

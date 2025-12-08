@@ -444,7 +444,11 @@ impl PriceOracleContractBase {
         }
         //validate record timestamp
         let ledger_timestamp = timestamps::ledger_timestamp(&e);
-        if timestamp == 0 || !timestamps::is_valid(e, timestamp) || timestamp > ledger_timestamp {
+        let last_timestamp = prices::get_last_timestamp(e);
+        if !timestamps::is_valid(e, timestamp)
+            || timestamp > ledger_timestamp
+            || timestamp <= last_timestamp
+        {
             panic_with_error!(&e, Error::InvalidTimestamp);
         }
         //extract prices for all assets from update record
