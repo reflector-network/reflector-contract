@@ -10,6 +10,7 @@ use test_case::test_case;
 
 #[should_panic]
 #[test_case(0; "zero timestamp")]
+#[test_case(1_000_000; "timestamp greater than current ledger")]
 #[test_case(900_001 ; "unaligned timestamp")]
 #[test_case(600_000 ; "valid timestamp same as last")]
 #[test_case(300_000 ; "valid timestamp less than last")]

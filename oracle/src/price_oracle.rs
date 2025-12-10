@@ -436,23 +436,12 @@ impl PriceOracleContractBase {
     // Panics if not authorized or price snapshot record is invalid
     pub fn set_price(e: &Env, update: PriceUpdate, timestamp: u64) {
         auth::panic_if_not_admin(e);
-        if update.prices.len() == 0 {
-            return; //skip empty updates
-        }
-        if update.prices.len() > assets::load_all_assets(e).len() {
-            panic_with_error!(&e, Error::InvalidPricesUpdate);
-        }
-        //validate record timestamp
-        let ledger_timestamp = timestamps::ledger_timestamp(&e);
-        let last_timestamp = prices::get_last_timestamp(e);
-        if !timestamps::is_valid(e, timestamp)
-            || timestamp > ledger_timestamp
-            || timestamp <= last_timestamp
-        {
-            panic_with_error!(&e, Error::InvalidTimestamp);
-        }
         //extract prices for all assets from update record
         let all = assets::load_all_assets(e);
+        //validate prices length
+        if update.prices.len() == 0 || update.prices.len() > all.len() {
+            panic_with_error!(&e, Error::InvalidPricesUpdate);
+        }
         let asset_prices = prices::extract_update_record_prices(e, &update, all.len());
         //store history timestamps for all assets
         prices::update_history_mask(e, &asset_prices, timestamp);
