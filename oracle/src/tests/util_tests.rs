@@ -1,12 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use soroban_sdk::{log, Bytes, Env, Vec};
+use soroban_sdk::{log, testutils::Address as _, Address, Bytes, Env, Vec};
 use test_case::test_case;
 
-use crate::{mapping, prices};
+use crate::{mapping, prices, settings};
 
-fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
+pub fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
     let mut mask = [0u8; 32];
     for (asset, price) in updates.iter().enumerate() {
         if price > 0 {
@@ -101,4 +101,18 @@ fn update_record_bitmask_test() {
             );
         }
     }
+}
+
+#[test_case(0, 0; "zero timestamp")]
+#[test_case(600_000, 600_000; "aligned timestamp")]
+#[test_case(623_456, 600_000; "non-aligned timestamp")]
+fn normalize_timestamp_test(input: u64, expected: u64) {
+    let e = Env::default();
+    //register contract to have storage available
+    let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
+    e.as_contract(&contract.address(), || {
+        settings::set_resolution(&e, 300_000);
+        let normalized = crate::timestamps::normalize(&e, input);
+        assert_eq!(normalized, expected);
+    });
 }

@@ -1,6 +1,6 @@
-use crate::types::{PriceData, PriceUpdate};
+use crate::types::{Error, PriceData, PriceUpdate};
 use crate::{mapping, protocol, settings, timestamps};
-use soroban_sdk::{Bytes, Env, Vec};
+use soroban_sdk::{panic_with_error, Bytes, Env, Vec};
 
 const CACHE_KEY: &str = "cache";
 const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
@@ -162,12 +162,18 @@ pub fn load_history_record(e: &Env, timestamp: u64) -> Option<PriceUpdate> {
 
 // Update prices stored in the oracle
 pub fn store_prices(e: &Env, update: &PriceUpdate, timestamp: u64, update_v1: &Vec<i128>) {
-    //get the last timestamp
+    //validate timestamp
+    let ledger_timestamp = timestamps::ledger_timestamp(&e);
     let last_timestamp = get_last_timestamp(e);
-    //update the last timestamp
-    if timestamp > last_timestamp {
-        set_last_timestamp(e, timestamp);
+    if !timestamps::is_valid(e, timestamp)
+        || timestamp > ledger_timestamp
+        || timestamp <= last_timestamp
+    {
+        panic_with_error!(&e, Error::InvalidTimestamp);
     }
+
+    //update last timestamp
+    set_last_timestamp(e, timestamp);
 
     //set the price
     let temps_storage = e.storage().temporary();
