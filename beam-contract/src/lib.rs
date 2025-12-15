@@ -2,7 +2,7 @@
 mod cost;
 mod tests;
 
-use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
+use cost::{charge_invocation_fee, load_costs_config, set_costs_config};
 use oracle::price_oracle::PriceOracleContractBase;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use oracle::{auth, settings};
@@ -139,15 +139,14 @@ impl BeamOracleContract {
     //
     // # Arguments
     //
-    // * `invocation` - Invocation type (single price check, cross-price, TWAP, etc.)
     // * `periods` - Number of requested history periods
     //
     // # Returns
     //
     // Amount of fee tokens required to pay for invocation
-    pub fn estimate_cost(e: &Env, invocation: InvocationComplexity, periods: u32) -> i128 {
+    pub fn estimate_cost(e: &Env, periods: u32) -> i128 {
         let fee_config = settings::get_fee_config(e);
-        cost::estimate_invocation_cost(e, invocation, periods, fee_config)
+        cost::estimate_invocation_cost(e, periods, fee_config)
     }
 
     // Return contract admin address
@@ -174,7 +173,7 @@ impl BeamOracleContract {
         caller.require_auth();
         let res = PriceOracleContractBase::price(e, asset, timestamp);
         if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
+            charge_invocation_fee(e, &caller, 1);
         }
         res
     }
@@ -193,7 +192,7 @@ impl BeamOracleContract {
         caller.require_auth();
         let res = PriceOracleContractBase::lastprice(e, asset);
         if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
+            charge_invocation_fee(e, &caller, 1);
         }
         res
     }
@@ -213,133 +212,7 @@ impl BeamOracleContract {
         caller.require_auth();
         let res = PriceOracleContractBase::prices(e, asset, records);
         if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Price, records);
-        }
-        res
-    }
-
-    // Returns most recent cross price record for pair of assets
-    //
-    // # Arguments
-    //
-    // * `caller` - Caller that covers invocation cost
-    // * `base_asset` - Base asset
-    // * `quote_asset` - Quote asset
-    //
-    // # Returns
-    //
-    // Recent cross price (base_asset_price/quote_asset_price) for given assets or None if there were no records found
-    pub fn x_last_price(
-        e: &Env,
-        caller: Address,
-        base_asset: Asset,
-        quote_asset: Asset,
-    ) -> Option<PriceData> {
-        caller.require_auth();
-        let res = PriceOracleContractBase::x_last_price(e, base_asset, quote_asset);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
-        }
-        res
-    }
-
-    // Return cross price for pair of assets at specific timestamp
-    //
-    // # Arguments
-    //
-    // * `caller` - Caller that covers invocation cost
-    // * `base_asset` - Base asset
-    // * `quote_asset` - Quote asset
-    // * `timestamp` - Timestamp
-    //
-    // # Returns
-    //
-    // Cross price (base_asset_price/quote_asset_price) at given timestamp or None if there were no records found for quoted assets
-    pub fn x_price(
-        e: &Env,
-        caller: Address,
-        base_asset: Asset,
-        quote_asset: Asset,
-        timestamp: u64,
-    ) -> Option<PriceData> {
-        caller.require_auth();
-        let res = PriceOracleContractBase::x_price(e, base_asset, quote_asset, timestamp);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, 1);
-        }
-        res
-    }
-
-    // Returns last N cross price records of for pair of assets
-    //
-    // # Arguments
-    //
-    // * `caller` - Caller that covers invocation cost
-    // * `base_asset` - Base asset
-    // * `quote_asset` - Quote asset
-    // * `records` - Number of records to fetch
-    //
-    // # Returns
-    //
-    // Last N cross prices (base_asset_price/quote_asset_price) or None if there were no records found for quoted assets
-    pub fn x_prices(
-        e: &Env,
-        caller: Address,
-        base_asset: Asset,
-        quote_asset: Asset,
-        records: u32,
-    ) -> Option<Vec<PriceData>> {
-        caller.require_auth();
-        let res = PriceOracleContractBase::x_prices(e, base_asset, quote_asset, records);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::CrossPrice, records);
-        }
-        res
-    }
-
-    // Returns time-weighted average price for given asset over N recent records
-    //
-    // # Arguments
-    //
-    // * `caller` - Caller that covers invocation cost
-    // * `asset` - Asset to quote
-    // * `records` - Number of records to process
-    //
-    // # Returns
-    //
-    // TWAP for the given asset over N recent records or None if asset is not supported
-    pub fn twap(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<i128> {
-        caller.require_auth();
-        let res = PriceOracleContractBase::twap(e, asset, records);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Twap, records);
-        }
-        res
-    }
-
-    // Returns time-weighted average cross price for given asset pair over N recent records
-    //
-    // # Arguments
-    //
-    // * `caller` - Caller that covers invocation cost
-    // * `base_asset` - Base asset
-    // * `quote_asset` - Quote asset
-    // * `records` - Number of records to process
-    //
-    // # Returns
-    //
-    // TWAP (base_asset_price/quote_asset_price) or None if assets are not supported
-    pub fn x_twap(
-        e: &Env,
-        caller: Address,
-        base_asset: Asset,
-        quote_asset: Asset,
-        records: u32,
-    ) -> Option<i128> {
-        caller.require_auth();
-        let res = PriceOracleContractBase::x_twap(e, base_asset, quote_asset, records);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::CrossTwap, records);
+            charge_invocation_fee(e, &caller, records);
         }
         res
     }

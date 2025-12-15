@@ -242,57 +242,6 @@ pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
     }
 }
 
-// Calculate TWAP approximation from loaded price range
-pub fn calculate_twap<F: Fn(u64) -> Option<PriceData>>(
-    e: &Env,
-    get_price_fn: F,
-    records: u32,
-) -> Option<i128> {
-    let prices = load_prices(&e, get_price_fn, records)?;
-
-    if prices.len() != records {
-        return None;
-    }
-
-    let last_price_timestamp = prices.first()?.timestamp * 1000; //convert to milliseconds to match the timestamp format
-    let timeframe = settings::get_resolution(e) as u64;
-    let current_time = timestamps::ledger_timestamp(&e);
-
-    //check if the last price is too old
-    if last_price_timestamp + timeframe + 60 * 1000 < current_time {
-        return None;
-    }
-
-    let sum: i128 = prices.iter().map(|price_data| price_data.price).sum();
-    Some(sum / prices.len() as i128)
-}
-
-// Load prices for a pair of assets
-pub fn load_cross_price(
-    e: &Env,
-    asset_pair_indexes: (u32, u32),
-    timestamp: u64,
-    decimals: u32,
-) -> Option<PriceData> {
-    //get the asset indexes
-    let (base_asset, quote_asset) = asset_pair_indexes;
-    //check if the asset are the same
-    if base_asset == quote_asset {
-        return Some(normalize_price_data(10i128.pow(decimals), timestamp));
-    }
-    //get the price for base_asset
-    let base_asset_price = retrieve_asset_price_data(e, base_asset, timestamp)?;
-    //get the price for quote_asset
-    let quote_asset_price = retrieve_asset_price_data(e, quote_asset, timestamp)?;
-
-    //calculate the cross price
-    let price = fixed_div_floor(base_asset_price.price, quote_asset_price.price, decimals);
-    if price.is_none() {
-        return None;
-    }
-    Some(normalize_price_data(price.unwrap(), timestamp))
-}
-
 // Get cached records from the instance storage
 fn load_price_records_cache(e: &Env) -> Option<Vec<(u64, PriceUpdate)>> {
     e.storage().instance().get(&CACHE_KEY)
@@ -331,30 +280,4 @@ pub fn get_price_v1(e: &Env, asset: u8, timestamp: u64) -> Option<i128> {
 // (deprecated)
 fn format_price_key_v1(asset: u8, timestamp: u64) -> u128 {
     (timestamp as u128) << 64 | asset as u128
-}
-
-// Div+floor with a specified precision
-pub fn fixed_div_floor(dividend: i128, divisor: i128, decimals: u32) -> Option<i128> {
-    if dividend <= 0 || divisor <= 0 {
-        return None;
-    }
-    let ashift = core::cmp::min(38 - dividend.ilog10(), decimals);
-    let bshift = core::cmp::max(decimals - ashift, 0);
-
-    let mut vdividend = dividend;
-    let mut vdivisor = divisor;
-    if ashift > 0 {
-        let svdividend = vdividend.checked_mul(10_i128.pow(ashift));
-        if svdividend.is_none() {
-            return None;
-        }
-        vdividend = svdividend?;
-    }
-    if bshift > 0 {
-        vdivisor /= 10_i128.pow(bshift);
-    }
-    if vdivisor <= 0 {
-        return None;
-    }
-    Some(vdividend / vdivisor)
 }

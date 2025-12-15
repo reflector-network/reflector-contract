@@ -44,7 +44,7 @@ contracts to check the `timestamp` field of the returned values against the curr
 reported quotes are not stale.
 
 Other contracts interact with oracle contracts, retrieving data stored earlier by Reflector consensus.
-Consumers can fetch historical ranges, use cross-price calculation, utilize TWAP averaging, or simply pull the most
+Consumers can fetch historical ranges, or simply pull the most
 recent token price depending on the use-case.
 
 The following diagram outlines a general oracle data flow:
@@ -144,16 +144,6 @@ pub trait Contract {
     fn lastprice(asset: Asset) -> Option<PriceData>;
     // Quotes last N price records for the given asset
     fn prices(asset: Asset, records: u32) -> Option<Vec<PriceData>>;
-    // Quotes the most recent cross price record for the pair of assets
-    fn x_last_price(base_asset: Asset, quote_asset: Asset) -> Option<PriceData>;
-    // Quotes the cross price for the pair of assets at specific timestamp
-    fn x_price(base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData>;
-    // Quotes last N cross price records of for the pair of assets
-    fn x_prices(base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>>;
-    // Quotes the time-weighted average price for the given asset over N recent records
-    fn twap(asset: Asset, records: u32) -> Option<i128>;
-    // Quotes the time-weighted average cross price for the given asset pair over N recent records
-    fn x_twap(base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128>;
     // Price feed resolution (default tick period timeframe, in seconds - 5 minutes by default)
     fn resolution() -> u32;
     // Historical records retention period, in seconds (24 hours by default)
@@ -299,16 +289,6 @@ pub trait Contract {
     fn lastprice(caller: Address, asset: Asset) -> Option<PriceData>;
     // Quotes last N price records for the given asset
     fn prices(caller: Address, asset: Asset, records: u32) -> Option<Vec<PriceData>>;
-    // Quotes the most recent cross price record for the pair of assets
-    fn x_last_price(caller: Address, base_asset: Asset, quote_asset: Asset) -> Option<PriceData>;
-    // Quotes the cross price for the pair of assets at specific timestamp
-    fn x_price(caller: Address, base_asset: Asset, quote_asset: Asset, timestamp: u64) -> Option<PriceData>;
-    // Quotes last N cross price records of for the pair of assets
-    fn x_prices(caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<Vec<PriceData>>;
-    // Quotes the time-weighted average price for the given asset over N recent records
-    fn twap(caller: Address, asset: Asset, records: u32) -> Option<i128>;
-    // Quotes the time-weighted average cross price for the given asset pair over N recent records
-    fn x_twap(caller: Address, base_asset: Asset, quote_asset: Asset, records: u32) -> Option<i128>;
     // Price feed resolution (default tick period timeframe, in seconds - 5 minutes by default)
     fn resolution() -> u32;
     // Historical records retention period, in seconds (24 hours by default)
@@ -341,17 +321,6 @@ pub enum Asset {
 pub struct PriceData {
     pub price: i128,   // asset price at given point in time
     pub timestamp: u64 // record timestamp
-}
-
-// Invocation complexity factor
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvocationComplexity {
-    NModifier = 0, // multiplier for number of requested periods, not utilized directly for cost calculation
-    Price = 1, // single asset price record request
-    Twap = 2, // TWAP approximation over N records
-    CrossPrice = 3, // cross-price calculation for two assets
-    CrossTwap = 4, // TWAP approximation over N records for cross-price quote
 }
 
 // Possible runtime errors
