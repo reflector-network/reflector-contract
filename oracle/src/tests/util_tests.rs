@@ -57,7 +57,7 @@ fn position_encoding_bitmask_test() {
             };
             updates.push_back(price);
         }
-        mask = mapping::update_history_mask(&e, mask, &updates);
+        mask = mapping::update_history_mask(&e, mask, &updates, 1);
     }
     log!(&e, "entire mask", mask);
 

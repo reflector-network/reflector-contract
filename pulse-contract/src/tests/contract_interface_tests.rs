@@ -108,15 +108,15 @@ fn prices_update_test() {
 
     let assets = init_data.assets;
 
-    client.set_cache_size(&256);
+    client.set_cache_size(&3);
 
     let mut history_prices = Vec::new(&env);
 
     //set more than 255 prices to check that history mask is overwritten correctly
-    for i in 0..257 {
+    for i in 0..500 {
         let timestamp = 600_000 + i * 300_000;
 
-        if timestamp != 900_000 && timestamp != 1200_000 {
+        if i < 1 || i > 255 {
             let updates = generate_random_updates(&env, &assets, normalize_price(100));
             history_prices.push_front((timestamp, updates.clone()));
             //set prices for assets
@@ -146,6 +146,18 @@ fn prices_update_test() {
             let price_data = client.price(&asset, &(timestamp / 1000));
             let expected_price = all_prices.get(asset_index as u32).unwrap_or_default();
             if expected_price > 0 {
+                if price_data.is_none() {
+                    std::println!(
+                        "Verifying asset {} at timestamp {}: expected price {:?}",
+                        asset_index,
+                        timestamp,
+                        expected_price
+                    );
+                    panic!(
+                        "Expected price for asset {} at timestamp {}",
+                        asset_index, timestamp
+                    );
+                }
                 let price = price_data.unwrap();
                 assert_eq!(price.price, expected_price);
                 assert_eq!(price.timestamp, convert_to_seconds(timestamp));

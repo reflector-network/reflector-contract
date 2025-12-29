@@ -110,7 +110,6 @@ fn get_history_map(e: &Env) -> Bytes {
         .unwrap_or_else(|| Bytes::new(e))
 }
 
-//
 pub fn update_history_mask(e: &Env, prices: &Vec<i128>, timestamp: u64) {
     //load state
     let last_timestamp = get_last_timestamp(e);
@@ -120,21 +119,11 @@ pub fn update_history_mask(e: &Env, prices: &Vec<i128>, timestamp: u64) {
     let mut update_delta = 0;
     if last_timestamp > 0 && timestamp > last_timestamp {
         update_delta = (timestamp - last_timestamp) / resolution;
-    }
-    //add missing intervals
-    if update_delta > 1 {
-        for _ in 1..update_delta {
-            let mut empty_prices = Vec::new(e);
-            for _ in 0..prices.len() {
-                empty_prices.push_back(0i128);
-            }
-            history_map = mapping::update_history_mask(e, history_map, &empty_prices);
-        }
+        update_delta = core::cmp::min(update_delta, 256); //max 256 periods tracked
     }
 
     //update the position mask
-    history_map = mapping::update_history_mask(e, history_map, prices);
-
+    history_map = mapping::update_history_mask(e, history_map, prices, update_delta as u32);
     //store updated timestamps
     e.storage().instance().set(&HISTORY_KEY, &history_map);
 }

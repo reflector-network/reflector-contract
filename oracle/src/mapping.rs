@@ -4,7 +4,13 @@ use soroban_sdk::{Bytes, Env, Vec, U256};
 const RECORD_SIZE: u32 = 32;
 
 // Update history records containing a bitmask of all prices recorded within the last update period
-pub fn update_history_mask(e: &Env, mut history_mask: Bytes, updates: &Vec<i128>) -> Bytes {
+pub fn update_history_mask(
+    e: &Env,
+    mut history_mask: Bytes,
+    updates: &Vec<i128>,
+    updates_delta: u32,
+) -> Bytes {
+    history_mask = shift_history_map(e, history_mask, updates_delta.saturating_sub(1));
     let one = U256::from_u32(e, 1);
     //iterate through all updates
     for (asset_index, price) in updates.iter().enumerate() {
@@ -38,6 +44,45 @@ pub fn update_history_mask(e: &Env, mut history_mask: Bytes, updates: &Vec<i128>
         }
     }
     history_mask //return updated history
+}
+
+pub fn shift_history_map(e: &Env, mut history_mask: Bytes, gaps_count: u32) -> Bytes {
+    if gaps_count == 0 {
+        return history_mask;
+    }
+
+    // if delta >= 255 – everything older than 256 periods is forgotten
+    if gaps_count >= 255 {
+        return Bytes::new(e);
+    }
+
+    let len = history_mask.len();
+    let mut offset: u32 = 0;
+
+    // iterate through all asset records
+    while offset + RECORD_SIZE <= len {
+        let from = offset;
+        let to = from + RECORD_SIZE;
+
+        // retrieve particular asset history record
+        let encoded = history_mask.slice(from..to);
+        let mut bitmask = U256::from_be_bytes(e, &encoded);
+
+        // shift left by delta
+        bitmask = bitmask.shl(gaps_count);
+
+        // encode into bytes again
+        let encoded_new = bitmask.to_be_bytes();
+
+        // write back to the history mask
+        for i in 0..RECORD_SIZE {
+            history_mask.set(from + i, encoded_new.get(i).unwrap());
+        }
+
+        offset += RECORD_SIZE;
+    }
+
+    history_mask
 }
 
 // Check whether asset price has been quoted for a certain period based on history records bitmask
