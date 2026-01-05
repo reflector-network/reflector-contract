@@ -6,8 +6,6 @@ const CACHE_KEY: &str = "cache";
 const LAST_TIMESTAMP_KEY: &str = "last_timestamp";
 const HISTORY_KEY: &str = "history";
 
-const MAX_PREV_PRICE_DEPTH: u32 = 5;
-
 pub const PRICE_RECORDS_LIMIT: u32 = 20; //max number of records to return
 
 fn normalize_price_data(price: i128, timestamp: u64) -> PriceData {
