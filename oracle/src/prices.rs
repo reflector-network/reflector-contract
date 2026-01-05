@@ -220,21 +220,22 @@ pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
         return None;
     }
 
-    let mut records_to_load: i32 = records as i32;
-    while records_to_load >= (MAX_PREV_PRICE_DEPTH as i32 * -1) {
+    //expected timestamp for the oldest record to fetch based on the requested records count
+    let lower_boundary = timestamp - resolution * records as u64;
+    //last timestamp included in the response
+    let mut last_included = timestamp;
+    //continue to iterate until the last record with ts<=lower_boundary found
+    //(required for further interpolation if the value at lower_boundary is not available)
+    while last_included > lower_boundary {
         //invoke price fetch callback for each record
         if let Some(price) = get_price_fn(timestamp) {
             prices.push_back(price);
-            if records_to_load <= 1 {
-                //loaded final record
-                break;
-            }
+            last_included = timestamp;
         }
+        timestamp -= resolution; //walk back in time
         if timestamp < resolution {
-            break;
+            break; //reached 0 timestamp - never happens in real life
         }
-        timestamp -= resolution;
-        records_to_load -= 1;
     }
 
     if prices.is_empty() {
