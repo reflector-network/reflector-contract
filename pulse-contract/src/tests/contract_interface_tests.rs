@@ -7,7 +7,7 @@ use oracle::prices::{self, PRICE_RECORDS_LIMIT};
 use oracle::types::FeeConfig;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{Address, Vec, log, Env};
+use soroban_sdk::{log, Address, Env, Vec};
 use test_case::test_case;
 
 #[test]
