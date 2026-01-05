@@ -1,5 +1,4 @@
 #![cfg(test)]
-extern crate std;
 
 use crate::tests::setup_tests::{
     convert_to_seconds, generate_random_updates, generate_updates, init_contract, normalize_price,
@@ -8,7 +7,7 @@ use oracle::prices::{self, PRICE_RECORDS_LIMIT};
 use oracle::types::FeeConfig;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{Address, Vec};
+use soroban_sdk::{Address, Vec, log, Env};
 use test_case::test_case;
 
 #[test]
@@ -102,8 +101,11 @@ fn lastprice_test() {
     assert_eq!(price.timestamp, convert_to_seconds(timestamp));
 }
 
-#[test]
-fn prices_update_test() {
+#[test_case(255, "gap 255")]
+#[test_case(256, "gap 256")]
+#[test_case(257, "gap 257")]
+#[test_case(1000, "gap 1000")]
+fn prices_update_test(gap: u64, _description: &str) {
     let (env, client, init_data) = init_contract();
 
     let assets = init_data.assets;
@@ -113,10 +115,10 @@ fn prices_update_test() {
     let mut history_prices = Vec::new(&env);
 
     //set more than 255 prices to check that history mask is overwritten correctly
-    for i in 0..500 {
+    for i in 0..(gap + 256) {
         let timestamp = 600_000 + i * 300_000;
 
-        if i < 1 || i > 255 {
+        if i < 1 || i > gap {
             let updates = generate_random_updates(&env, &assets, normalize_price(100));
             history_prices.push_front((timestamp, updates.clone()));
             //set prices for assets
@@ -147,9 +149,10 @@ fn prices_update_test() {
             let expected_price = all_prices.get(asset_index as u32).unwrap_or_default();
             if expected_price > 0 {
                 if price_data.is_none() {
-                    std::println!(
+                    log!(
+                        &env,
                         "Verifying asset {} at timestamp {}: expected price {:?}",
-                        asset_index,
+                        asset_index as u64,
                         timestamp,
                         expected_price
                     );
