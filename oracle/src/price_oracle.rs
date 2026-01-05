@@ -74,11 +74,11 @@ impl PriceOracleContractBase {
         prices::get_last_timestamp(e) / 1000 //convert to seconds
     }
 
-    // Return current contract protocol version
+    // Return current contract version (from package)
     //
     // # Returns
     //
-    // Contract protocol version
+    // Contract version
     pub fn version(_e: &Env) -> u32 {
         env!("CARGO_PKG_VERSION")
             .split(".")
