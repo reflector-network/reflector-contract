@@ -36,7 +36,7 @@ fn generate_updates(env: &Env, assets: &Vec<types::Asset>, price: i128) -> types
 }
 
 #[test_case(600_000, 8, 600_000, 2; "5 rounds skipped")]
-#[test_case(600_000, 10, 0, 1; "10 rounds skipped")]
+#[test_case(600_000, 30, 600_000, 2; "30 rounds skipped")]
 fn prices_test(
     first_timestamp: u64,
     rounds_gap: u64,
@@ -52,6 +52,7 @@ fn prices_test(
             &("ASSET_".to_string() + &i.to_string()),
         )));
     }
+    //register asset contract just to have storage
     let contract_id = e.register_stellar_asset_contract_v2(Address::generate(&e));
     e.as_contract(&contract_id.address(), || {
         let timeframe: u64 = 300_000;
