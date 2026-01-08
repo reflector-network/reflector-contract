@@ -68,7 +68,7 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
         //update expiration records
         expiration.push_back(expiration_timestamp);
     }
-    if asset_list.len() >= ASSET_LIMIT {
+    if asset_list.len() > ASSET_LIMIT {
         panic_with_error!(&e, Error::AssetLimitExceeded);
     }
     //update assets list and expirations vector
