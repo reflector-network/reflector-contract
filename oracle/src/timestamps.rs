@@ -12,7 +12,7 @@ pub fn normalize(e: &Env, value: u64) -> u64 {
 
 // Whether the timestamp is valid
 pub fn is_valid(e: &Env, value: u64) -> bool {
-    value == normalize(e, value)
+    value > 0 && value == normalize(e, value)
 }
 
 // Convert days to milliseconds

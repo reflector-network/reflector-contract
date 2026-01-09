@@ -76,11 +76,11 @@ impl BeamOracleContract {
         PriceOracleContractBase::last_timestamp(e)
     }
 
-    // Return current contract protocol version
+    // Return current contract version (from package)
     //
     // # Returns
     //
-    // Contract protocol version
+    // Contract version
     pub fn version(e: &Env) -> u32 {
         PriceOracleContractBase::version(e)
     }

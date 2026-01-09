@@ -92,9 +92,8 @@ pub fn get_fee_config(e: &Env) -> FeeConfig {
         .get(&RETENTION_KEY)
         .unwrap_or_else(|| {
             FeeConfig::Some((
-                // by default - XRF tokens with 1 XRF base cost
-                Address::from_str(e, XRF_TOKEN_ADDRESS),
-                DEFAULT_RETENTION_FEE,
+                Address::from_str(e, XRF_TOKEN_ADDRESS), // by default - XRF tokens
+                DEFAULT_RETENTION_FEE,                   // with DEFAULT_RETENTION_FEE base cost
             ))
         })
 }
