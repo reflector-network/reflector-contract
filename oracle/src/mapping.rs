@@ -4,8 +4,21 @@ use soroban_sdk::{Bytes, Env, Vec, U256};
 const RECORD_SIZE: u32 = 32;
 
 // Update history records containing a bitmask of all prices recorded within the last update period
-pub fn update_history_mask(e: &Env, mut history_mask: Bytes, updates: &Vec<i128>) -> Bytes {
+pub fn update_history_mask(
+    e: &Env,
+    mut history_mask: Bytes,
+    updates: &Vec<i128>,
+    mut updates_delta: u32,
+) -> Bytes {
     let one = U256::from_u32(e, 1);
+    //wipe entire history if the gap between updates is too large
+    if updates_delta > 255 {
+        history_mask = Bytes::new(e); //start with an empty mask
+        updates_delta = 1;
+    }
+    if updates_delta < 1 {
+        updates_delta = 1; //this should never happen, but just in case
+    }
     //iterate through all updates
     for (asset_index, price) in updates.iter().enumerate() {
         //locate particular asset mask slice position within entire history record
@@ -18,8 +31,9 @@ pub fn update_history_mask(e: &Env, mut history_mask: Bytes, updates: &Vec<i128>
         } else {
             U256::from_u32(e, 0) //no previous records for this asset found
         };
-        //shift existing mask, all mask bits older than 256 periods get evicted
-        bitmask = bitmask.shl(1);
+        //shift existing mask to the left by the number of periods since the last update
+        //all mask bits older than 256 periods get evicted
+        bitmask = bitmask.shl(updates_delta);
         //set corresponding bit if price found
         if price > 0 {
             bitmask = bitmask.add(&one);

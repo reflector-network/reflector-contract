@@ -1,14 +1,13 @@
 #![cfg(test)]
-extern crate std;
 
 use crate::tests::setup_tests::{
     convert_to_seconds, generate_random_updates, generate_updates, init_contract, normalize_price,
 };
 use oracle::prices::{self, PRICE_RECORDS_LIMIT};
-use oracle::types::FeeConfig;
+use oracle::types::{FeeConfig, PriceData};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{Address, Vec};
+use soroban_sdk::{log, Address, Env, Vec};
 use test_case::test_case;
 
 #[test]
@@ -102,21 +101,24 @@ fn lastprice_test() {
     assert_eq!(price.timestamp, convert_to_seconds(timestamp));
 }
 
-#[test]
-fn prices_update_test() {
+#[test_case(255, "gap 255")]
+#[test_case(256, "gap 256")]
+#[test_case(257, "gap 257")]
+#[test_case(1000, "gap 1000")]
+fn prices_update_test(gap: u64, _description: &str) {
     let (env, client, init_data) = init_contract();
 
     let assets = init_data.assets;
 
-    client.set_cache_size(&256);
+    client.set_cache_size(&3);
 
     let mut history_prices = Vec::new(&env);
 
-    //set more than 255 prices to check that history mask is overwritten correctly
-    for i in 0..257 {
+    //set more than 256 prices to check that history mask is overwritten correctly
+    for i in 0..(gap + 256) {
         let timestamp = 600_000 + i * 300_000;
 
-        if timestamp != 900_000 && timestamp != 1200_000 {
+        if i < 1 || i > gap {
             let updates = generate_random_updates(&env, &assets, normalize_price(100));
             history_prices.push_front((timestamp, updates.clone()));
             //set prices for assets
@@ -132,32 +134,60 @@ fn prices_update_test() {
             ..ledger_info
         });
     }
+    //prepare an array with zero prices
+    let mut zero_prices = Vec::new(&env);
+    for _ in 0..assets.len() {
+        zero_prices.push_back(0i128);
+    }
 
+    //verify
     let mut had_gaps = false;
     let mut had_prices = false;
-    //verify prices
+    let mut iterations = 0;
+
     for (history_index, (timestamp, updates)) in history_prices.iter().enumerate() {
+        let all_prices;
         if history_index > 255 {
-            break;
+            all_prices = zero_prices.clone();
+        } else {
+            let total = assets.len() + 10; //+10 to check that out of range assets are ignored
+                                           //get records from generated updates
+            all_prices = prices::extract_update_record_prices(&env, &updates, total);
         }
-        let total = assets.len() + 10; //+10 to check that out of range assets are ignored
-        let all_prices = prices::extract_update_record_prices(&env, &updates, total);
+
+        //match price with mask for each asset in update
         for (asset_index, asset) in assets.iter().enumerate() {
-            let price_data = client.price(&asset, &(timestamp / 1000));
+            //get oracle-quoted price
+            let oracle_price = client.price(&asset, &(timestamp / 1000));
+            //get expected price (from generated data)
             let expected_price = all_prices.get(asset_index as u32).unwrap_or_default();
             if expected_price > 0 {
-                let price = price_data.unwrap();
-                assert_eq!(price.price, expected_price);
+                let price = oracle_price.unwrap_or_else(|| PriceData {
+                    price: 0,
+                    timestamp: 0,
+                });
+                assert_eq!(
+                    price.price, expected_price,
+                    "asset {} at timestamp {}",
+                    asset_index, timestamp
+                );
                 assert_eq!(price.timestamp, convert_to_seconds(timestamp));
                 had_prices = true;
             } else {
-                assert!(price_data.is_none());
+                assert!(
+                    oracle_price.is_none(),
+                    "asset {} at timestamp {}",
+                    asset_index,
+                    timestamp
+                );
                 had_gaps = true;
             }
         }
+        iterations += 1;
     }
     assert!(had_prices);
     assert!(had_gaps);
+    log!(&env, "{} iterations", iterations);
 }
 
 #[test]
