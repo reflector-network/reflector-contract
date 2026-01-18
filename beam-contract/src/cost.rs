@@ -10,14 +10,8 @@ const SCALE: i128 = 10_000_000;
 pub enum InvocationComplexity {
     //Multiplicator for number of requested periods, not utilized directly for cost calculation
     NModifier = 0,
-    //Single asset price record request
+    //Regular asset price record request
     Price = 1,
-    //TWAP approximation over N records
-    Twap = 2,
-    //Cross-price calculation for two assets
-    CrossPrice = 3,
-    //TWAP approximation over N records for cross-price quote
-    CrossTwap = 4,
 }
 //invocation cost config is stored as vector with indexes corresponding to InvocationComplexity
 

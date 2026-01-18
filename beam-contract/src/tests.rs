@@ -83,26 +83,13 @@ fn invocation_charge_for_none_result_test() {
     fee_token.mint(&caller, &100_000_000);
     //get price for the first asset
     client.lastprice(&caller, &init_data.assets.first_unchecked());
-    //get cross price
-    client.x_twap(
-        &caller,
-        &init_data.base_asset,
-        &init_data.assets.first_unchecked(),
-        &5,
-    );
     //check that fee token was deducted
     let fee_token_balance = fee_token.balance(&caller);
     assert_eq!(fee_token_balance, 100_000_000);
 }
 
 #[test_case(InvocationComplexity::Price, 1, 10_000_000 ; "price")]
-#[test_case(InvocationComplexity::Twap, 1, 15_000_000 ; "twap")]
-#[test_case(InvocationComplexity::CrossPrice, 1, 20_000_000 ; "cross price")]
-#[test_case(InvocationComplexity::CrossTwap, 1, 30_000_000 ; "cross twap")]
 #[test_case(InvocationComplexity::Price, 2, 12_000_000 ; "multi round price")]
-#[test_case(InvocationComplexity::Twap, 5, 27_000_000 ; "multi round twap")]
-#[test_case(InvocationComplexity::CrossPrice, 2, 24_000_000 ; "multi round cross price")]
-#[test_case(InvocationComplexity::CrossTwap, 7, 66_000_000 ; "multi round cross twap")]
 fn invocation_charge_estimate_test(
     invocation: InvocationComplexity,
     periods: u32,

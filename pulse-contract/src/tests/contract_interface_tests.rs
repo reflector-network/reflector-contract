@@ -3,7 +3,7 @@
 use crate::tests::setup_tests::{
     convert_to_seconds, generate_random_updates, generate_updates, init_contract, normalize_price,
 };
-use oracle::prices::{self, PRICE_RECORDS_LIMIT};
+use oracle::prices::{self};
 use oracle::types::{FeeConfig, PriceData};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::StellarAssetClient;
@@ -44,33 +44,6 @@ fn last_timestamp_test() {
     result = client.last_timestamp();
 
     assert_eq!(result, convert_to_seconds(600_000));
-}
-
-#[test_case(2, Some(normalize_price(1)) ; "twap 2 rounds")]
-#[test_case(PRICE_RECORDS_LIMIT + 1, None ; "twap exceeds limit")]
-fn x_twap_test(records: u32, price: Option<i128>) {
-    let (env, client, init_data) = init_contract();
-
-    let assets = init_data.assets;
-
-    //set prices for assets
-    let timestamp = 600_000;
-    let updates = generate_updates(&env, &assets, normalize_price(100));
-
-    env.mock_all_auths();
-
-    //set prices for assets
-    client.set_price(&updates, &timestamp);
-
-    let timestamp = 900_000;
-    let updates = generate_updates(&env, &assets, normalize_price(200));
-
-    //set prices for assets
-    client.set_price(&updates, &timestamp);
-
-    let result = client.x_twap(&assets.get_unchecked(1), &assets.get_unchecked(2), &records);
-
-    assert_eq!(result, price);
 }
 
 #[test]

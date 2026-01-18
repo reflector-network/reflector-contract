@@ -195,11 +195,7 @@ pub fn store_prices(e: &Env, update: &PriceUpdate, timestamp: u64, update_v1: &V
 }
 
 // Load requested number of price records with a price function callback
-pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
-    e: &Env,
-    get_price_fn: F,
-    records: u32,
-) -> Option<Vec<PriceData>> {
+pub fn load_prices(e: &Env, asset_index: u32, records: u32) -> Option<Vec<PriceData>> {
     let mut timestamp = obtain_last_record_timestamp(e);
     if timestamp == 0 {
         return None;
@@ -221,7 +217,7 @@ pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
     //(required for further interpolation if the value at lower_boundary is not available)
     while last_included > lower_boundary {
         //invoke price fetch callback for each record
-        if let Some(price) = get_price_fn(timestamp) {
+        if let Some(price) = retrieve_asset_price_data(e, asset_index, timestamp) {
             prices.push_back(price);
             last_included = timestamp;
         }
@@ -236,57 +232,6 @@ pub fn load_prices<F: Fn(u64) -> Option<PriceData>>(
     } else {
         Some(prices)
     }
-}
-
-// Calculate TWAP approximation from loaded price range
-pub fn calculate_twap<F: Fn(u64) -> Option<PriceData>>(
-    e: &Env,
-    get_price_fn: F,
-    records: u32,
-) -> Option<i128> {
-    let prices = load_prices(&e, get_price_fn, records)?;
-
-    if prices.len() != records {
-        return None;
-    }
-
-    let last_price_timestamp = prices.first()?.timestamp * 1000; //convert to milliseconds to match the timestamp format
-    let timeframe = settings::get_resolution(e) as u64;
-    let current_time = timestamps::ledger_timestamp(&e);
-
-    //check if the last price is too old
-    if last_price_timestamp + timeframe + 60 * 1000 < current_time {
-        return None;
-    }
-
-    let sum: i128 = prices.iter().map(|price_data| price_data.price).sum();
-    Some(sum / prices.len() as i128)
-}
-
-// Load prices for a pair of assets
-pub fn load_cross_price(
-    e: &Env,
-    asset_pair_indexes: (u32, u32),
-    timestamp: u64,
-    decimals: u32,
-) -> Option<PriceData> {
-    //get the asset indexes
-    let (base_asset, quote_asset) = asset_pair_indexes;
-    //check if the asset are the same
-    if base_asset == quote_asset {
-        return Some(normalize_price_data(10i128.pow(decimals), timestamp));
-    }
-    //get the price for base_asset
-    let base_asset_price = retrieve_asset_price_data(e, base_asset, timestamp)?;
-    //get the price for quote_asset
-    let quote_asset_price = retrieve_asset_price_data(e, quote_asset, timestamp)?;
-
-    //calculate the cross price
-    let price = fixed_div_floor(base_asset_price.price, quote_asset_price.price, decimals);
-    if price.is_none() {
-        return None;
-    }
-    Some(normalize_price_data(price.unwrap(), timestamp))
 }
 
 // Get cached records from the instance storage

@@ -39,17 +39,6 @@ pub fn resolve_asset_index(e: &Env, asset: &Asset) -> Option<u32> {
     index
 }
 
-// Resolve indexes for a pair of assets
-pub fn resolve_asset_pair_indexes(
-    e: &Env,
-    base_asset: Asset,
-    quote_asset: Asset,
-) -> Option<(u32, u32)> {
-    let base_asset = resolve_asset_index(e, &base_asset)?;
-    let quote_asset = resolve_asset_index(e, &quote_asset)?;
-    Some((base_asset, quote_asset))
-}
-
 // Add assets to the oracle
 pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     //use default expiration period for new assets

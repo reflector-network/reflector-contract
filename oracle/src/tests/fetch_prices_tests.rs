@@ -35,15 +35,21 @@ fn generate_updates(env: &Env, assets: &Vec<types::Asset>, price: i128) -> types
     }
 }
 
-#[test_case(600_000, 8, 600_000, 2; "5 rounds skipped")]
-#[test_case(600_000, 30, 600_000, 2; "30 rounds skipped")]
-fn prices_test(
+#[test_case(600_000, 8, 600_000, 2; "skipped 5 rounds")]
+#[test_case(600_000, 30, 600_000, 2; "skipped 30 rounds")]
+fn store_prices_test(
     first_timestamp: u64,
     rounds_gap: u64,
     expected_first_price_ts: u64,
     expected_prices_count: u32,
 ) {
     let e = Env::default();
+
+    let ledger_info = e.ledger().get();
+    e.ledger().set(LedgerInfo {
+        timestamp: 600_000,
+        ..ledger_info
+    });
 
     let mut assets = Vec::new(&e);
     for i in 0..10 {
@@ -78,11 +84,7 @@ fn prices_test(
             ..e.ledger().get()
         });
 
-        let prices = prices::load_prices(
-            &e,
-            |timestamp| prices::retrieve_asset_price_data(&e, 0, timestamp),
-            3,
-        );
+        let prices = prices::load_prices(&e, 0, 3);
         assert_ne!(prices, None);
         let prices = prices.unwrap();
         assert_eq!(prices.len(), expected_prices_count);
