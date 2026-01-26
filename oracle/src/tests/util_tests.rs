@@ -4,20 +4,7 @@ extern crate std;
 use soroban_sdk::{log, testutils::Address as _, Address, Bytes, Env, Vec};
 use test_case::test_case;
 
-use crate::{mapping, prices, settings};
-
-pub fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
-    let mut mask = [0u8; 32];
-    for (asset, price) in updates.iter().enumerate() {
-        if price > 0 {
-            let (byte, bitmask) = mapping::resolve_period_update_mask_position(asset as u32);
-            let i = byte as usize;
-            let bytemask = mask[i] | bitmask;
-            mask[i] = bytemask
-        }
-    }
-    Bytes::from_array(e, &mask)
-}
+use crate::{mapping, prices, settings, testutils::generate_update_record_mask};
 
 #[test_case(1, 0, 14)]
 #[test_case(0, 1, 14)]

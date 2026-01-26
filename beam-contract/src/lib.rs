@@ -1,6 +1,5 @@
 #![no_std]
 mod cost;
-mod tests;
 
 use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
 use oracle::price_oracle::PriceOracleContractBase;
@@ -333,3 +332,6 @@ impl BeamOracleContract {
         PriceOracleContractBase::update_contract(e, wasm_hash);
     }
 }
+
+#[cfg(test)]
+mod tests;

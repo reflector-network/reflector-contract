@@ -28,8 +28,8 @@ pub fn load_costs_config(e: &Env) -> Vec<u64> {
         .get(&COST_CONFIG_KEY)
         .unwrap_or_else(|| {
             Vec::from_array(
-                e, // RecordsModifier, Price, Twap, CrossPrice, CrossTwap
-                [2_000_000, 10_000_000, 15_000_000, 20_000_000, 30_000_000],
+                e, // RecordsModifier, Price
+                [2_000_000, 10_000_000],
             )
         })
 }

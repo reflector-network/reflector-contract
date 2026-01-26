@@ -3,11 +3,11 @@ extern crate alloc;
 extern crate std;
 use alloc::string::ToString;
 
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, Bytes, Env, Symbol, Vec};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, Symbol, Vec};
 
 use test_case::test_case;
 
+use crate::testutils::set_ledger_timestamp;
 use crate::*;
 
 fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
@@ -45,11 +45,7 @@ fn store_prices_test(
 ) {
     let e = Env::default();
 
-    let ledger_info = e.ledger().get();
-    e.ledger().set(LedgerInfo {
-        timestamp: 600_000,
-        ..ledger_info
-    });
+    set_ledger_timestamp(&e, 600_000);
 
     let mut assets = Vec::new(&e);
     for i in 0..10 {
@@ -79,10 +75,7 @@ fn store_prices_test(
         timestamp += timeframe * rounds_gap;
         set_price(&e, timestamp, &assets);
 
-        e.ledger().set(LedgerInfo {
-            timestamp: timestamp / 1000,
-            ..e.ledger().get()
-        });
+        set_ledger_timestamp(&e, timestamp / 1000);
 
         let prices = prices::load_prices(&e, 0, 3);
         assert_ne!(prices, None);

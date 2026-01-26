@@ -2,19 +2,23 @@
 extern crate alloc;
 extern crate std;
 
-use crate::tests::setup_tests::{
-    convert_to_seconds, generate_assets, generate_update_record_mask, generate_updates,
-    init_contract, normalize_price, DECIMALS, RESOLUTION,
-};
 use alloc::string::ToString;
+use oracle::init_contract_with_admin;
+use oracle::testutils::{
+    convert_to_seconds, generate_assets, generate_update_record_mask, generate_updates,
+    normalize_price, DECIMALS, RESOLUTION,
+};
 use oracle::types::{Asset, FeeConfig, PriceUpdate};
 use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{symbol_short, Address, IntoVal, Symbol, TryIntoVal, Vec};
 
+use crate::{PulseOracleContract, PulseOracleContractClient};
+
 #[test]
 fn init_test() {
-    let (_env, client, init_data) = init_contract();
+    let (_env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let address = client.admin();
     assert_eq!(address.unwrap(), init_data.admin.clone());
@@ -40,7 +44,8 @@ fn init_test() {
 
 #[test]
 fn set_price_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = init_data.assets;
 
@@ -66,7 +71,8 @@ fn set_price_test() {
 #[test]
 #[should_panic]
 fn set_price_zero_timestamp_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = init_data.assets;
 
@@ -82,7 +88,8 @@ fn set_price_zero_timestamp_test() {
 #[test]
 #[should_panic]
 fn set_price_invalid_timestamp_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = init_data.assets;
 
@@ -98,7 +105,8 @@ fn set_price_invalid_timestamp_test() {
 #[test]
 #[should_panic]
 fn set_price_future_timestamp_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = init_data.assets;
 
@@ -113,7 +121,8 @@ fn set_price_future_timestamp_test() {
 
 #[test]
 fn add_assets_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = generate_assets(&env, 10, init_data.assets.len() - 1);
 
@@ -134,7 +143,8 @@ fn add_assets_test() {
 #[test]
 #[should_panic]
 fn add_assets_duplicate_test() {
-    let (env, client, _) = init_contract();
+    let (env, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let mut assets = Vec::new(&env);
     let duplicate_asset = Asset::Other(Symbol::new(&env, &("ASSET_DUPLICATE")));
@@ -149,7 +159,8 @@ fn add_assets_duplicate_test() {
 #[test]
 #[should_panic]
 fn asset_update_overflow_test() {
-    let (env, client, _) = init_contract();
+    let (env, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     env.mock_all_auths();
 
@@ -169,7 +180,8 @@ fn asset_update_overflow_test() {
 #[test]
 #[should_panic]
 fn price_update_overflow_test() {
-    let (env, client, _) = init_contract();
+    let (env, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     env.mock_all_auths();
 
@@ -189,7 +201,8 @@ fn price_update_overflow_test() {
 
 #[test]
 fn set_history_retention_period_test() {
-    let (env, client, _) = init_contract();
+    let (env, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let period = 100_000;
 
@@ -204,7 +217,8 @@ fn set_history_retention_period_test() {
 
 #[test]
 fn set_fee_config_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     //emulate old contract state
     env.as_contract(&client.address, || {
@@ -247,7 +261,8 @@ fn set_fee_config_test() {
 
 #[test]
 fn authorization_successful_test() {
-    let (env, client, config_data) = init_contract();
+    let (env, client, config_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let period: u64 = 100;
     //set prices for assets
@@ -267,7 +282,8 @@ fn authorization_successful_test() {
 #[test]
 #[should_panic]
 fn authorization_failed_test() {
-    let (env, client, _) = init_contract();
+    let (env, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
     let account = Address::generate(&env);
 
     let period: u64 = 100;
