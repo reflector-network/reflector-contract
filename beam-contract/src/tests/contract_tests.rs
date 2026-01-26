@@ -16,7 +16,10 @@ fn set_invocation_config_test() {
 
     let initial_costs = client.invocation_costs();
     assert_eq!(initial_costs.len(), 2);
-    assert_eq!(initial_costs, Vec::from_array(&env, [2_000_000, 10_000_000]));
+    assert_eq!(
+        initial_costs,
+        Vec::from_array(&env, [2_000_000, 10_000_000])
+    );
 
     let costs = Vec::from_array(&env, [10, 20]);
     client.set_invocation_costs_config(&costs);
