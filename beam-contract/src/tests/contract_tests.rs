@@ -1,7 +1,6 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::cost::InvocationComplexity;
 use crate::{BeamOracleContract, BeamOracleContractClient};
 use oracle::testutils::register_token;
 use oracle::types::{Asset, FeeConfig};
@@ -47,26 +46,19 @@ fn invocation_charge_for_none_result_test() {
     assert_eq!(fee_token_balance, 100_000_000);
 }
 
-#[test_case(InvocationComplexity::Price, 1, 10_000_000 ; "price")]
-#[test_case(InvocationComplexity::Price, 2, 12_000_000 ; "multi round price")]
-fn invocation_charge_estimate_test(
-    invocation: InvocationComplexity,
-    periods: u32,
-    expected_fee: i128,
-) {
+#[test_case(1, 5_000_000 ; "price")]
+#[test_case(2, 5_750_000 ; "multi round price")]
+fn invocation_charge_estimate_test(periods: u32, expected_fee: i128) {
     let (env, client, init_data) =
         init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
 
     let fee_token_client = register_token(&env, &init_data.admin);
     let fee_config = FeeConfig::Some((fee_token_client.address.clone(), 1_000_000));
     client.set_fee_config(&fee_config);
-    let costs = Vec::from_array(
-        &env,
-        [2_000_000, 10_000_000, 15_000_000, 20_000_000, 30_000_000],
-    );
+    let costs = Vec::from_array(&env, [1_500_000, 5_000_000]);
     client.set_invocation_costs_config(&costs);
 
-    let fee = client.estimate_cost(&invocation, &periods);
+    let fee = client.estimate_cost(&periods);
     assert_eq!(fee, expected_fee);
 }
 

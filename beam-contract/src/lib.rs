@@ -1,7 +1,7 @@
 #![no_std]
 mod cost;
 
-use cost::{charge_invocation_fee, load_costs_config, set_costs_config, InvocationComplexity};
+use cost::{charge_invocation_fee, load_costs_config, set_costs_config};
 use oracle::price_oracle::PriceOracleContractBase;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
 use oracle::{auth, settings};
@@ -129,7 +129,7 @@ impl BeamOracleContract {
     //
     // # Returns
     //
-    // Invocation costs categorized by complexity
+    // Invocation costs. 0 index - records modifier, 1 index - price invocation cost
     pub fn invocation_costs(e: &Env) -> Vec<u64> {
         load_costs_config(e)
     }
@@ -138,15 +138,14 @@ impl BeamOracleContract {
     //
     // # Arguments
     //
-    // * `invocation` - Invocation type (single price check, cross-price, TWAP, etc.)
     // * `periods` - Number of requested history periods
     //
     // # Returns
     //
     // Amount of fee tokens required to pay for invocation
-    pub fn estimate_cost(e: &Env, invocation: InvocationComplexity, periods: u32) -> i128 {
+    pub fn estimate_cost(e: &Env, periods: u32) -> i128 {
         let fee_config = settings::get_fee_config(e);
-        cost::estimate_invocation_cost(e, invocation, periods, fee_config)
+        cost::estimate_invocation_cost(e, periods, fee_config)
     }
 
     // Return contract admin address
@@ -173,7 +172,7 @@ impl BeamOracleContract {
         caller.require_auth();
         let res = PriceOracleContractBase::price(e, asset, timestamp);
         if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
+            charge_invocation_fee(e, &caller, 1);
         }
         res
     }
@@ -192,7 +191,7 @@ impl BeamOracleContract {
         caller.require_auth();
         let res = PriceOracleContractBase::lastprice(e, asset);
         if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Price, 1);
+            charge_invocation_fee(e, &caller, 1);
         }
         res
     }
@@ -212,7 +211,7 @@ impl BeamOracleContract {
         caller.require_auth();
         let res = PriceOracleContractBase::prices(e, asset, records);
         if res.is_some() {
-            charge_invocation_fee(e, &caller, InvocationComplexity::Price, records);
+            charge_invocation_fee(e, &caller, records);
         }
         res
     }
