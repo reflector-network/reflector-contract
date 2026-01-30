@@ -210,7 +210,7 @@ impl MyAwesomeContract {
         // Create client for working with oracle
         let reflector_client = ReflectorBeamClient::new(&e, &oracle_address);
         // Authorize XRF fee charge for lastprice() invocation
-        authorize_spend(&e, &reflector_client, &InvocationComplexity::Price, 1);
+        authorize_spend(&e, &reflector_client, 1);
         // Ticker to lookup the price
         let ticker = ReflectorAsset::Other(Symbol::new(&e, &("BTC")));
         // Fetch the most recent price record for it
@@ -239,9 +239,9 @@ impl MyAwesomeContract {
 }
 
 // Authorization is required to spend XRF tokens that cover invocation cost
-fn authorize_spend(e: &Env, reflector_client: &ReflectorBeamClient, complexity: &InvocationComplexity, periods: u32) {
+fn authorize_spend(e: &Env, reflector_client: &ReflectorBeamClient, periods: u32) {
     // How much will it cost
-    let cost = reflector_client.estimate_cost(&complexity, &periods);
+    let cost = reflector_client.estimate_cost(&periods);
     // XRF token address on Mainnet
     let xrf = Address::from_str(&e, "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LULV5TU35N2CIZA");
     // Build authorization request
@@ -302,8 +302,8 @@ pub trait Contract {
     fn extend_asset_ttl(sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
     fn expires(asset: Asset) -> Option<u64>;
-    // Estimate invocation cost based on its complexity
-    fn estimate_cost(invocation: InvocationComplexity, periods: u32) -> i128;
+    // Estimate invocation cost based on periods
+    fn estimate_cost(periods: u32) -> i128;
 }
 
 // Quoted asset definition
@@ -320,14 +320,6 @@ pub enum Asset {
 pub struct PriceData {
     pub price: i128,   // asset price at given point in time
     pub timestamp: u64 // record timestamp
-}
-
-// Invocation complexity factor
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InvocationComplexity {
-    NModifier = 0, // multiplier for number of requested periods, not utilized directly for cost calculation
-    Price = 1, // regular asset price record request
 }
 
 // Possible runtime errors
