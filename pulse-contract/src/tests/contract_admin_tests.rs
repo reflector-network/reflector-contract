@@ -11,7 +11,7 @@ use oracle::testutils::{
 use oracle::types::{Asset, FeeConfig, PriceUpdate};
 use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{symbol_short, Address, IntoVal, Symbol, TryIntoVal, Vec};
+use soroban_sdk::{symbol_short, Address, Map, Symbol, TryIntoVal, Vec};
 
 use crate::{PulseOracleContract, PulseOracleContractClient};
 
@@ -57,15 +57,31 @@ fn set_price_test() {
     //set prices for assets
     client.set_price(&updates, &timestamp);
 
-    assert_eq!(
-        env.events().all().last().unwrap().1,
-        (
-            symbol_short!("REFLECTOR"),
-            symbol_short!("update"),
-            &600_000u64
-        )
-            .into_val(&env)
-    );
+    use soroban_sdk::xdr::{ContractEventBody, ScVal};
+
+    match env.events().all().events().last().unwrap().body.clone() {
+        ContractEventBody::V0(ce) => {
+            //verify event topics
+            let mut topics_val = std::vec::Vec::new();
+            topics_val.push(ScVal::from(symbol_short!("REFLECTOR")));
+            topics_val.push(ScVal::from(symbol_short!("update")));
+            topics_val.push(ScVal::from(600_000u64));
+            assert_eq!(ce.topics.into_vec(), topics_val);
+
+            //verify event data
+            let mut updates = Vec::new(&env);
+            for asset in assets.iter() {
+                let asset_val = match asset {
+                    Asset::Stellar(address) => address.to_val(),
+                    Asset::Other(symbol) => symbol.to_val(),
+                };
+                updates.push_back((asset_val, normalize_price(100)));
+            }
+            let mut update_data = Map::new(&env);
+            update_data.set(Symbol::new(&env, "update_data"), updates);
+            assert_eq!(ce.data, ScVal::from(update_data));
+        }
+    }
 }
 
 #[test]
