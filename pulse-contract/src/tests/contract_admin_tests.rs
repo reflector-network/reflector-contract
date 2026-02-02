@@ -11,7 +11,7 @@ use oracle::testutils::{
 use oracle::types::{Asset, FeeConfig, PriceUpdate};
 use soroban_sdk::testutils::{Address as _, Events, MockAuth, MockAuthInvoke};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{symbol_short, Address, IntoVal, Symbol, TryIntoVal, Vec};
+use soroban_sdk::{Address, Event, Symbol, TryIntoVal, Vec};
 
 use crate::{PulseOracleContract, PulseOracleContractClient};
 
@@ -57,14 +57,24 @@ fn set_price_test() {
     //set prices for assets
     client.set_price(&updates, &timestamp);
 
+    //build expected event
+    let expected_event = oracle::events::UpdateEvent {
+        timestamp: 600_000,
+        update_data: {
+            let mut upd = Vec::new(&env);
+            for asset in assets.iter() {
+                let asset_val = match asset {
+                    Asset::Stellar(address) => address.to_val(),
+                    Asset::Other(symbol) => symbol.to_val(),
+                };
+                upd.push_back((asset_val, normalize_price(100)));
+            }
+            upd
+        },
+    };
     assert_eq!(
-        env.events().all().last().unwrap().1,
-        (
-            symbol_short!("REFLECTOR"),
-            symbol_short!("update"),
-            &600_000u64
-        )
-            .into_val(&env)
+        env.events().all().events().last().unwrap(),
+        &expected_event.to_xdr(&env, &client.address)
     );
 }
 
