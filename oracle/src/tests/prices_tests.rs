@@ -1,11 +1,10 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{price_oracle, prices, tests::util_tests::generate_update_record_mask, types};
-use soroban_sdk::{
-    testutils::{Address as _, Ledger, LedgerInfo},
-    vec, Address, Env, Symbol,
-};
+use crate::testutils::generate_update_record_mask;
+use crate::testutils::set_ledger_timestamp;
+use crate::{price_oracle, prices, types};
+use soroban_sdk::{testutils::Address as _, vec, Address, Env, Symbol};
 use test_case::test_case;
 
 #[should_panic]
@@ -35,10 +34,7 @@ fn invalid_timestamp_update_test(ts: u64) {
             100,
         );
         prices::set_last_timestamp(&e, 600_000);
-        e.ledger().set(LedgerInfo {
-            timestamp: 9001,
-            ..e.ledger().get()
-        });
+        set_ledger_timestamp(&e, 9001);
     });
 
     e.as_contract(&contract.address(), || {
@@ -75,10 +71,7 @@ fn price_update_test() {
             100,
         );
         prices::set_last_timestamp(&e, 600_000);
-        e.ledger().set(LedgerInfo {
-            timestamp: 9001,
-            ..e.ledger().get()
-        });
+        set_ledger_timestamp(&e, 9001);
     });
 
     e.as_contract(&contract.address(), || {

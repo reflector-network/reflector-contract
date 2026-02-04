@@ -1,5 +1,4 @@
 #![no_std]
-mod tests;
 
 use oracle::price_oracle::PriceOracleContractBase;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
@@ -280,3 +279,6 @@ impl PulseOracleContract {
         PriceOracleContractBase::update_contract(e, wasm_hash);
     }
 }
+
+#[cfg(test)]
+mod tests;

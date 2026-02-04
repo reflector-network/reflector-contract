@@ -1,18 +1,21 @@
 #![cfg(test)]
 
-use crate::tests::setup_tests::{
-    convert_to_seconds, generate_random_updates, generate_updates, init_contract, normalize_price,
-};
+use oracle::init_contract_with_admin;
 use oracle::prices::{self};
+use oracle::testutils::{
+    convert_to_seconds, generate_random_updates, generate_updates, normalize_price, register_token,
+    set_ledger_timestamp,
+};
 use oracle::types::{FeeConfig, PriceData};
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{log, Address, Env, Vec};
+use soroban_sdk::{log, testutils::Address as _, Address, Env, Vec};
 use test_case::test_case;
+
+use crate::{PulseOracleContract, PulseOracleContractClient};
 
 #[test]
 fn version_test() {
-    let (_env, client, _) = init_contract();
+    let (_, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
     let result = client.version();
     let version = env!("CARGO_PKG_VERSION")
         .split(".")
@@ -24,8 +27,25 @@ fn version_test() {
 }
 
 #[test]
+fn cache_size_test() {
+    let (_, client, _) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let mut result = client.cache_size();
+
+    assert_eq!(result, 0);
+
+    client.set_cache_size(&5);
+
+    result = client.cache_size();
+
+    assert_eq!(result, 5);
+}
+
+#[test]
 fn last_timestamp_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = init_data.assets;
 
@@ -48,7 +68,8 @@ fn last_timestamp_test() {
 
 #[test]
 fn lastprice_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = &init_data.assets;
 
@@ -79,7 +100,8 @@ fn lastprice_test() {
 #[test_case(257, "gap 257")]
 #[test_case(1000, "gap 1000")]
 fn prices_update_test(gap: u64, _description: &str) {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     let assets = init_data.assets;
 
@@ -101,11 +123,7 @@ fn prices_update_test(gap: u64, _description: &str) {
             let updates = generate_random_updates(&env, &assets, 0);
             history_prices.push_front((timestamp, updates.clone()));
         }
-        let ledger_info = env.ledger().get();
-        env.ledger().set(LedgerInfo {
-            timestamp: timestamp / 1000 + 300,
-            ..ledger_info
-        });
+        set_ledger_timestamp(&env, timestamp / 1000 + 300);
     }
     //prepare an array with zero prices
     let mut zero_prices = Vec::new(&env);
@@ -165,20 +183,16 @@ fn prices_update_test(gap: u64, _description: &str) {
 
 #[test]
 fn extend_asset_ttl_test() {
-    let (env, client, init_data) = init_contract();
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
-    env.mock_all_auths();
-
-    let fee_asset = env
-        .register_stellar_asset_contract_v2(init_data.admin.clone())
-        .address();
-    let fee_config = FeeConfig::Some((fee_asset.clone(), 1_000_000));
+    let fee_token = register_token(&env, &init_data.admin);
+    let fee_config = FeeConfig::Some((fee_token.address.clone(), 1_000_000));
     client.set_fee_config(&fee_config);
 
     //generate sponsor and mint fee tokens
     let sponsor = Address::generate(&env);
-    let token_client = StellarAssetClient::new(&env, &fee_asset);
-    token_client.mint(&sponsor, &10_000_000);
+    fee_token.mint(&sponsor, &10_000_000);
 
     //get initial expiration
     let asset = &init_data.assets.first_unchecked();
