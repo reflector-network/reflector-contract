@@ -1,5 +1,5 @@
 use crate::types::{Asset, Error, FeeConfig};
-use soroban_sdk::{Address, Env};
+use soroban_sdk::Env;
 
 const RETENTION_PERIOD_KEY: &str = "period";
 const BASE_KEY: &str = "base_asset";
@@ -7,9 +7,6 @@ const DECIMALS_KEY: &str = "decimals";
 const RESOLUTION_KEY: &str = "resolution";
 const RETENTION_KEY: &str = "retention";
 const CACHE_SIZE_KEY: &str = "cache_size";
-
-pub const XRF_TOKEN_ADDRESS: &str = "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LULV5TU35N2CIZA";
-const DEFAULT_RETENTION_FEE: i128 = 100_000_000;
 
 #[inline]
 pub fn init(
@@ -90,10 +87,5 @@ pub fn get_fee_config(e: &Env) -> FeeConfig {
     e.storage()
         .instance()
         .get(&RETENTION_KEY)
-        .unwrap_or_else(|| {
-            FeeConfig::Some((
-                Address::from_str(e, XRF_TOKEN_ADDRESS), // by default - XRF tokens
-                DEFAULT_RETENTION_FEE,                   // with DEFAULT_RETENTION_FEE base cost
-            ))
-        })
+        .unwrap_or_else(|| FeeConfig::None)
 }
