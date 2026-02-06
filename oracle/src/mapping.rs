@@ -1,4 +1,4 @@
-use soroban_sdk::{Bytes, Env, Vec, U256};
+use soroban_sdk::{Bytes, Env, Vec};
 
 // Each history record occupies 32 bytes in history mask, allowing to store information for up to 256 recent periods
 const RECORD_SIZE: u32 = 32;
@@ -10,7 +10,6 @@ pub fn update_history_mask(
     updates: &Vec<i128>,
     mut updates_delta: u32,
 ) -> Bytes {
-    let one = U256::from_u32(e, 1);
     //wipe entire history if the gap between updates is too large
     if updates_delta > 255 {
         history_mask = Bytes::new(e); //start with an empty mask
@@ -22,36 +21,85 @@ pub fn update_history_mask(
     //iterate through all updates
     for (asset_index, price) in updates.iter().enumerate() {
         //locate particular asset mask slice position within entire history record
-        let from = asset_index as u32 * RECORD_SIZE;
-        let to = from + RECORD_SIZE;
-        //retrieve previous asset mask
-        let mut bitmask = if history_mask.len() >= to {
-            let encoded = history_mask.slice(from..to);
-            U256::from_be_bytes(e, &encoded)
-        } else {
-            U256::from_u32(e, 0) //no previous records for this asset found
-        };
+        let offset = asset_index as u32 * RECORD_SIZE;
+        //that's new asset, add to the mask
+        if offset >= history_mask.len() {
+            let empty = [0u8; 32];
+            history_mask.extend_from_array(&empty);
+        }
         //shift existing mask to the left by the number of periods since the last update
         //all mask bits older than 256 periods get evicted
-        bitmask = bitmask.shl(updates_delta);
+        if updates_delta <= 255 {
+            history_mask = shift_left(history_mask, offset, updates_delta);
+        }
         //set corresponding bit if price found
         if price > 0 {
-            bitmask = bitmask.add(&one);
-        }
-        //encode into bytes again
-        let encoded = bitmask.to_be_bytes();
-        //write to the history
-        if history_mask.len() <= from {
-            //that's new asset, add to the mask
-            history_mask.append(&encoded);
-        } else {
-            //replace bytes
-            for i in 0..RECORD_SIZE {
-                history_mask.set(from + i, encoded.get(i).unwrap());
-            }
+            history_mask = mark_updated(history_mask, offset);
         }
     }
     history_mask //return updated history
+}
+
+pub(crate) fn shift_left(mut mask: Bytes, offset: u32, shift: u32) -> Bytes {
+    if shift == 0 {
+        return mask;
+    }
+    //if shifting by full bytes or more than available
+    if shift > 255 {
+        //all bits shifted out, return zeros
+        for i in 0..RECORD_SIZE {
+            mask.set(offset + i, 0);
+        }
+        return mask;
+    }
+
+    let byte_shift = shift / 8;
+    let bit_shift = (shift % 8) as u8;
+
+    if bit_shift == 0 {
+        //simple byte shift
+        for i in 0..(RECORD_SIZE - byte_shift) {
+            let byte = mask.get(offset + i + byte_shift).unwrap();
+            mask.set(offset + i, byte);
+        }
+        //zero out the rest
+        for i in (RECORD_SIZE - byte_shift)..RECORD_SIZE {
+            mask.set(offset + i, 0);
+        }
+    } else {
+        //shift with bit offset
+        let carry_shift = 8 - bit_shift;
+        for i in 0..(RECORD_SIZE - byte_shift) {
+            let current = mask.get(offset + i + byte_shift).unwrap();
+            let shifted = current << bit_shift;
+            let carry = if i + byte_shift + 1 < RECORD_SIZE {
+                mask.get(offset + i + byte_shift + 1).unwrap() >> carry_shift
+            } else {
+                0
+            };
+            mask.set(offset + i, shifted | carry);
+        }
+        //zero out the rest
+        for i in (RECORD_SIZE - byte_shift)..RECORD_SIZE {
+            mask.set(offset + i, 0);
+        }
+    }
+    mask
+}
+
+pub(crate) fn mark_updated(mut mask: Bytes, offset: u32) -> Bytes {
+    let mut carry = 1u8;
+    //start from the last byte (least significant) and propagate carry
+    for i in (0..RECORD_SIZE).rev() {
+        if carry == 0 {
+            break;
+        }
+        let byte = mask.get(offset + i).unwrap();
+        let (new_byte, new_carry) = byte.overflowing_add(carry);
+        mask.set(offset + i, new_byte);
+        carry = if new_carry { 1 } else { 0 };
+    }
+    mask
 }
 
 // Check whether asset price has been quoted for a certain period based on history records bitmask

@@ -76,7 +76,7 @@ pub fn extract_update_record_prices(e: &Env, update: &PriceUpdate, total: u32) -
 }
 
 fn extract_single_update_record_price(update: &PriceUpdate, asset_index: u32) -> i128 {
-    let mut update_index = 0;
+    let mut update_index = 0; //TODO: call extract_update_record_prices once and reuse results instead of calling extract_single_update_record_price multiple times for the same update.
     for asset in 0..asset_index + 1 {
         if mapping::check_period_updated(&update.mask, asset) {
             if asset == asset_index {
@@ -150,7 +150,7 @@ pub fn load_history_record(e: &Env, timestamp: u64) -> Option<PriceUpdate> {
 }
 
 // Update prices stored in the oracle
-pub fn store_prices(e: &Env, update: &PriceUpdate, timestamp: u64, update_v1: &Vec<i128>) {
+pub fn store_prices(e: &Env, update: PriceUpdate, timestamp: u64, update_v1: Vec<i128>) {
     //validate timestamp
     let ledger_timestamp = timestamps::ledger_timestamp(&e);
     let last_timestamp = get_last_timestamp(e);
@@ -172,7 +172,7 @@ pub fn store_prices(e: &Env, update: &PriceUpdate, timestamp: u64, update_v1: &V
     if cache_size > 0 {
         //if cache size is non-empty, store it in the instance
         let mut cache = load_price_records_cache(e).unwrap_or(Vec::new(&e));
-        cache.push_front((timestamp, update.clone()));
+        cache.push_front((timestamp, update));
         while cache.len() > cache_size {
             cache.pop_back(); //remove the oldest record if cache size exceeded
         }
@@ -216,6 +216,7 @@ pub fn load_prices(e: &Env, asset_index: u32, records: u32) -> Option<Vec<PriceD
     //continue to iterate until the last record with ts<=lower_boundary found
     //(required for further interpolation if the value at lower_boundary is not available)
     while last_included > lower_boundary {
+        //TODO: Load `history_map` and `cache` once outside the loop
         //invoke price fetch callback for each record
         if let Some(price) = retrieve_asset_price_data(e, asset_index, timestamp) {
             prices.push_back(price);
@@ -240,7 +241,7 @@ fn load_price_records_cache(e: &Env) -> Option<Vec<(u64, PriceUpdate)>> {
 }
 
 // Update price in legacy format (deprecated)
-pub fn store_price_v1(e: &Env, updates: &Vec<i128>, timestamp: u64, ledgers_to_live: u32) {
+pub fn store_price_v1(e: &Env, updates: Vec<i128>, timestamp: u64, ledgers_to_live: u32) {
     //iterate over the updates
     for (i, price) in updates.iter().enumerate() {
         //ignore zero prices
