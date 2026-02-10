@@ -1,7 +1,6 @@
 #![cfg(test)]
 
 use oracle::init_contract_with_admin;
-use oracle::prices::{self};
 use oracle::testutils::{
     convert_to_seconds, generate_random_updates, generate_updates, normalize_price, register_token,
     set_ledger_timestamp,

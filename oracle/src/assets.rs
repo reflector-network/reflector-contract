@@ -27,16 +27,7 @@ pub fn load_all_assets(e: &Env) -> Vec<Asset> {
 
 // Load asset index
 pub fn resolve_asset_index(e: &Env, asset: &Asset) -> Option<u32> {
-    let index: Option<u32>;
-    match asset {
-        Asset::Stellar(address) => {
-            index = e.storage().instance().get(&address);
-        }
-        Asset::Other(symbol) => {
-            index = e.storage().instance().get(&symbol);
-        }
-    }
-    index
+    load_all_assets(e).first_index_of(asset)
 }
 
 // Add assets to the oracle
@@ -49,10 +40,9 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     //for each new asset
     for asset in assets.iter() {
         //check if the asset has been already added
-        if resolve_asset_index(e, &asset).is_some() {
+        if asset_list.first_index_of(&asset).is_some() {
             panic_with_error!(&e, Error::AssetAlreadyExists);
         }
-        set_asset_index(e, &asset, asset_list.len());
         asset_list.push_back(asset);
         //update expiration records
         expiration.push_back(expiration_timestamp);
@@ -157,17 +147,4 @@ fn load_expiration_records(e: &Env) -> Vec<u64> {
 // Set expiration data for all assets
 fn set_expirations_records(e: &Env, expiration: &Vec<u64>) {
     e.storage().instance().set(&EXPIRATION_KEY, expiration)
-}
-
-// Store asset index
-#[inline]
-fn set_asset_index(e: &Env, asset: &Asset, index: u32) {
-    match asset {
-        Asset::Stellar(address) => {
-            e.storage().instance().set(&address, &index);
-        }
-        Asset::Other(symbol) => {
-            e.storage().instance().set(&symbol, &index);
-        }
-    }
 }

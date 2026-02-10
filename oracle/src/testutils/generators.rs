@@ -77,11 +77,21 @@ pub fn generate_random_updates(
 ) -> (PriceUpdate, VecDeque<i128>) {
     let mut updates = VecDeque::new();
     let mut filtered_price = Vec::new(&env);
+    let mut has_price = false;
     for _ in assets.iter() {
-        let price = if get_random_bool() { 0 } else { price };
+        //ensure that at least one price is set
+        let price = if (has_price || updates.len() < assets.len() as usize - 1) && get_random_bool()
+        {
+            0
+        } else {
+            price
+        };
         updates.push_back(price);
         if price > 0 {
             filtered_price.push_back(price);
+        }
+        if price > 0 {
+            has_price = true;
         }
     }
     let mask = generate_update_record_mask(env, &updates);
