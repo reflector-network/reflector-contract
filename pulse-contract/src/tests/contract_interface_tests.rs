@@ -7,8 +7,11 @@ use oracle::testutils::{
     set_ledger_timestamp,
 };
 use oracle::types::{FeeConfig, PriceData};
-use soroban_sdk::{log, testutils::Address as _, Address, Env, Vec};
+use soroban_sdk::{log, testutils::Address as _, Address, Env};
 use test_case::test_case;
+
+extern crate std;
+use std::{collections::VecDeque, println};
 
 use crate::{PulseOracleContract, PulseOracleContractClient};
 
@@ -59,7 +62,7 @@ fn last_timestamp_test() {
     env.mock_all_auths();
 
     //set prices for assets
-    client.set_price(&updates, &timestamp);
+    client.set_price(&updates.0, &timestamp);
 
     result = client.last_timestamp();
 
@@ -79,7 +82,7 @@ fn lastprice_test() {
     env.mock_all_auths();
 
     //set prices for assets
-    client.set_price(&updates, &timestamp);
+    client.set_price(&updates.0, &timestamp);
 
     let fee_asset = env
         .register_stellar_asset_contract_v2(init_data.admin.clone())
@@ -107,26 +110,30 @@ fn prices_update_test(gap: u64, _description: &str) {
 
     client.set_cache_size(&3);
 
-    let mut history_prices = Vec::new(&env);
+    let mut history_prices = VecDeque::new();
 
+    println!("setting prices...");
     //set more than 256 prices to check that history mask is overwritten correctly
     for i in 0..(gap + 256) {
         let timestamp = 600_000 + i * 300_000;
 
         if i < 1 || i > gap {
             let updates = generate_random_updates(&env, &assets, normalize_price(100));
-            history_prices.push_front((timestamp, updates.clone()));
             //set prices for assets
-            client.set_price(&updates, &timestamp);
+            client.set_price(&updates.0, &timestamp);
+            history_prices.push_front((timestamp, updates.1));
         } else {
             //simulate time passage without setting prices to create gaps in updates
             let updates = generate_random_updates(&env, &assets, 0);
-            history_prices.push_front((timestamp, updates.clone()));
+            history_prices.push_front((timestamp, updates.1));
         }
         set_ledger_timestamp(&env, timestamp / 1000 + 300);
     }
+
+    println!("verifying prices...");
+
     //prepare an array with zero prices
-    let mut zero_prices = Vec::new(&env);
+    let mut zero_prices = VecDeque::new();
     for _ in 0..assets.len() {
         zero_prices.push_back(0i128);
     }
@@ -137,13 +144,9 @@ fn prices_update_test(gap: u64, _description: &str) {
     let mut iterations = 0;
 
     for (history_index, (timestamp, updates)) in history_prices.iter().enumerate() {
-        let all_prices;
+        let mut all_prices = updates;
         if history_index > 255 {
-            all_prices = zero_prices.clone();
-        } else {
-            let total = assets.len() + 10; //+10 to check that out of range assets are ignored
-                                           //get records from generated updates
-            all_prices = prices::extract_update_record_prices(&env, &updates, total);
+            all_prices = &zero_prices;
         }
 
         //match price with mask for each asset in update
@@ -151,18 +154,18 @@ fn prices_update_test(gap: u64, _description: &str) {
             //get oracle-quoted price
             let oracle_price = client.price(&asset, &(timestamp / 1000));
             //get expected price (from generated data)
-            let expected_price = all_prices.get(asset_index as u32).unwrap_or_default();
-            if expected_price > 0 {
+            let expected_price = all_prices.get(asset_index).unwrap();
+            if expected_price > &0 {
                 let price = oracle_price.unwrap_or_else(|| PriceData {
                     price: 0,
                     timestamp: 0,
                 });
                 assert_eq!(
-                    price.price, expected_price,
+                    price.price, *expected_price,
                     "asset {} at timestamp {}",
                     asset_index, timestamp
                 );
-                assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+                assert_eq!(price.timestamp, convert_to_seconds(*timestamp));
                 had_prices = true;
             } else {
                 assert!(

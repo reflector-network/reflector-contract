@@ -123,7 +123,7 @@ pub fn update_history_mask(e: &Env, prices: &Vec<i128>, timestamp: u64) {
     }
 
     //update the position mask
-    history_map = mapping::update_history_mask(e, history_map, prices, update_delta as u32);
+    history_map = mapping::update_history_mask(history_map, prices, update_delta as u32);
     //store updated timestamps
     e.storage().instance().set(&HISTORY_KEY, &history_map);
 }

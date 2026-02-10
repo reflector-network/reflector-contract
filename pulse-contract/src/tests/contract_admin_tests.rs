@@ -55,7 +55,7 @@ fn set_price_test() {
     env.mock_all_auths();
 
     //set prices for assets
-    client.set_price(&updates, &timestamp);
+    client.set_price(&updates.0, &timestamp);
 
     //build expected event
     let expected_event = oracle::events::UpdateEvent {
@@ -92,7 +92,7 @@ fn set_price_zero_timestamp_test() {
     env.mock_all_auths();
 
     //set prices for assets
-    client.set_price(&updates, &timestamp);
+    client.set_price(&updates.0, &timestamp);
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn set_price_invalid_timestamp_test() {
     env.mock_all_auths();
 
     //set prices for assets
-    client.set_price(&updates, &timestamp);
+    client.set_price(&updates.0, &timestamp);
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn set_price_future_timestamp_test() {
     env.mock_all_auths();
 
     //set prices for assets
-    client.set_price(&updates, &timestamp);
+    client.set_price(&updates.0, &timestamp);
 }
 
 #[test]
@@ -197,13 +197,13 @@ fn price_update_overflow_test() {
 
     env.cost_estimate().budget().reset_unlimited();
 
-    let mut updates = Vec::new(&env);
+    let mut raw_prices = std::collections::VecDeque::new();
     for i in 1..=256 {
-        updates.push_back(normalize_price(i as i128 + 1));
+        raw_prices.push_back(normalize_price(i as i128 + 1));
     }
-    let mask = generate_update_record_mask(&env, &updates);
+    let mask = generate_update_record_mask(&env, &raw_prices);
     let update = PriceUpdate {
-        prices: updates,
+        prices: Vec::from_iter(&env, raw_prices.into_iter()),
         mask,
     };
     client.set_price(&update, &600_000);

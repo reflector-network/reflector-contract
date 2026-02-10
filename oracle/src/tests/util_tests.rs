@@ -4,7 +4,10 @@ extern crate std;
 use soroban_sdk::{log, testutils::Address as _, Address, Bytes, Env, Vec};
 use test_case::test_case;
 
-use crate::{mapping, prices, settings, testutils::generate_update_record_mask};
+use crate::{
+    mapping, prices, settings,
+    testutils::{generate_assets, generate_random_updates, generate_update_record_mask},
+};
 
 #[test_case(1, 0, 14)]
 #[test_case(0, 1, 14)]
@@ -44,7 +47,7 @@ fn position_encoding_bitmask_test() {
             };
             updates.push_back(price);
         }
-        mask = mapping::update_history_mask(&e, mask, &updates, 1);
+        mask = mapping::update_history_mask(mask, &updates, 1);
     }
     log!(&e, "entire mask", mask);
 
@@ -70,21 +73,21 @@ fn update_record_bitmask_test() {
     let e = Env::default();
     let iterations = 70;
 
-    let mut updates = Vec::from_array(&e, [0i128; 254]);
+    let mut updates = std::collections::VecDeque::from([0i128; 254]);
     for i in 0..iterations {
         for asset_index in 0..updates.len() {
             let price = match i & asset_index == 0 {
                 true => 1,
                 _ => 0,
             };
-            updates.set(asset_index, price);
+            updates[asset_index] = price;
         }
         let mask = generate_update_record_mask(&e, &updates);
         //log!(&e, "entire mask", mask);
         for (asset_index, price) in updates.iter().enumerate() {
             assert_eq!(
                 mapping::check_period_updated(&mask, asset_index as u32),
-                price > 0
+                price > &0
             );
         }
     }
@@ -132,4 +135,29 @@ fn mark_updated_test(input: &[u8; 32], expected: &[u8; 32]) {
     for i in 0..32 {
         assert_eq!(result.get(i).unwrap(), expected[i as usize]);
     }
+}
+
+#[test_case(1; "no gaps")]
+#[test_case(254; "gap of 254 rounds")]
+#[test_case(300; "gap of 300 rounds")]
+fn mask_the_same_with_history_mask_legacy_test(gap: u32) {
+    let env = Env::default();
+    let assets = generate_assets(&env, 150, 0);
+    //init history mask
+    let updates_delta = 1;
+    let history_mask = Bytes::new(&env);
+    let updates = generate_random_updates(&env, &assets, 100);
+    let prices = Vec::from_iter(&env, updates.1.into_iter());
+    let legacy_mask =
+        mapping::update_history_mask_legacy(&env, history_mask.clone(), &prices, updates_delta);
+    let new_mask = mapping::update_history_mask(history_mask, &prices, updates_delta);
+    assert_eq!(legacy_mask, new_mask);
+
+    //set prices after gap
+    let history_mask = legacy_mask;
+    let updates = generate_random_updates(&env, &assets, 100);
+    let prices = Vec::from_iter(&env, updates.1.into_iter());
+    let legacy_mask = mapping::update_history_mask_legacy(&env, history_mask.clone(), &prices, gap);
+    let new_mask = mapping::update_history_mask(history_mask, &prices, gap);
+    assert_eq!(legacy_mask, new_mask);
 }

@@ -2,9 +2,64 @@ use soroban_sdk::{Bytes, Env, Vec};
 
 // Each history record occupies 32 bytes in history mask, allowing to store information for up to 256 recent periods
 const RECORD_SIZE: u32 = 32;
+const RECORD_SIZE_USIZE: usize = 32;
+const MAX_HISTORY_SIZE: usize = 8192; // 256 assets * 32 bytes
 
 // Update history records containing a bitmask of all prices recorded within the last update period
 pub fn update_history_mask(
+    history_mask: Bytes,
+    updates: &Vec<i128>,
+    mut updates_delta: u32,
+) -> Bytes {
+    //create a buffer that can hold the entire history mask
+    let mut buffer = [0u8; MAX_HISTORY_SIZE];
+    //copy existing history mask into buffer
+    let current_len = history_mask.len() as usize;
+    history_mask.copy_into_slice(&mut buffer[..current_len]);
+
+    //wipe entire history if the gap between updates is too large
+    if updates_delta > 255 {
+        buffer.fill(0);
+        updates_delta = 1;
+    }
+    //this should never happen, but just in case
+    let delta = if updates_delta < 1 { 1 } else { updates_delta };
+
+    //iterate through all updates and update corresponding history records in the buffer
+    for (asset_index, price) in updates.iter().enumerate() {
+        let from = asset_index * RECORD_SIZE_USIZE;
+        let to = from + RECORD_SIZE_USIZE;
+
+        //256 bits as two 128 (since Rust doesn't have native 256-bit integer type)
+        let mut hi = u128::from_be_bytes(buffer[from..from + 16].try_into().unwrap());
+        let mut lo = u128::from_be_bytes(buffer[from + 16..to].try_into().unwrap());
+
+        //shift left by delta periods, evicting bits older than 256 periods
+        if delta >= 128 {
+            hi = lo << (delta - 128);
+            lo = 0;
+        } else {
+            hi = (hi << delta) | (lo >> (128 - delta));
+            lo = lo << delta;
+        }
+
+        //set lowest bit if price found
+        if price > 0 {
+            lo |= 1;
+        }
+
+        //write back to buffer
+        buffer[from..from + 16].copy_from_slice(&hi.to_be_bytes());
+        buffer[from + 16..to].copy_from_slice(&lo.to_be_bytes());
+    }
+
+    //get total size of updated history mask based on the number of assets and return as Bytes
+    let total_size = updates.len() as usize * RECORD_SIZE_USIZE;
+    Bytes::from_slice(history_mask.env(), &buffer[..total_size])
+}
+
+// Update history records containing a bitmask of all prices recorded within the last update period
+pub fn update_history_mask_legacy(
     e: &Env,
     mut history_mask: Bytes,
     updates: &Vec<i128>,

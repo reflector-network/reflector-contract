@@ -42,7 +42,10 @@ fn invalid_timestamp_update_test(ts: u64) {
             &e,
             types::PriceUpdate {
                 prices: vec![&e, 12345678i128],
-                mask: generate_update_record_mask(&e, &vec![&e, 12345678i128]),
+                mask: generate_update_record_mask(
+                    &e,
+                    &std::collections::VecDeque::from([12345678i128]),
+                ),
             },
             ts,
         );
@@ -79,7 +82,10 @@ fn price_update_test() {
             &e,
             types::PriceUpdate {
                 prices: vec![&e, 12345678i128],
-                mask: generate_update_record_mask(&e, &vec![&e, 12345678i128]),
+                mask: generate_update_record_mask(
+                    &e,
+                    &std::collections::VecDeque::from([12345678i128]),
+                ),
             },
             900_000,
         );
