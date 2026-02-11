@@ -6,7 +6,7 @@ use oracle::testutils::{
     set_ledger_timestamp,
 };
 use oracle::types::{FeeConfig, PriceData};
-use soroban_sdk::{log, testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::Address as _, Address};
 use test_case::test_case;
 
 extern crate std;
@@ -120,22 +120,15 @@ fn prices_update_test(gap: u64, _description: &str) {
             let updates = generate_random_updates(&env, &assets, normalize_price(100));
             //set prices for assets
             client.set_price(&updates.0, &timestamp);
-            history_prices.push_front((timestamp, updates.1));
+            history_prices.push_front((timestamp, Some(updates.1)));
         } else {
             //simulate time passage without setting prices to create gaps in updates
-            let updates = generate_random_updates(&env, &assets, 0);
-            history_prices.push_front((timestamp, updates.1));
+            history_prices.push_front((timestamp, None));
         }
         set_ledger_timestamp(&env, timestamp / 1000 + 300);
     }
 
     println!("verifying prices...");
-
-    //prepare an array with zero prices
-    let mut zero_prices = VecDeque::new();
-    for _ in 0..assets.len() {
-        zero_prices.push_back(0i128);
-    }
 
     //verify
     let mut had_gaps = false;
@@ -143,17 +136,21 @@ fn prices_update_test(gap: u64, _description: &str) {
     let mut iterations = 0;
 
     for (history_index, (timestamp, updates)) in history_prices.iter().enumerate() {
-        let mut all_prices = updates;
-        if history_index > 255 {
-            all_prices = &zero_prices;
-        }
-
         //match price with mask for each asset in update
         for (asset_index, asset) in assets.iter().enumerate() {
             //get oracle-quoted price
             let oracle_price = client.price(&asset, &(timestamp / 1000));
             //get expected price (from generated data)
-            let expected_price = all_prices.get(asset_index).unwrap();
+            let expected_price = match updates {
+                Some(updates) => {
+                    if history_index > 255 {
+                        &0
+                    } else {
+                        updates.get(asset_index).unwrap()
+                    }
+                }
+                None => &0,
+            };
             if expected_price > &0 {
                 let price = oracle_price.unwrap_or_else(|| PriceData {
                     price: 0,
@@ -161,8 +158,8 @@ fn prices_update_test(gap: u64, _description: &str) {
                 });
                 assert_eq!(
                     price.price, *expected_price,
-                    "asset {} at timestamp {}",
-                    asset_index, timestamp
+                    "asset {} at timestamp {} history index {}",
+                    asset_index, timestamp, history_index
                 );
                 assert_eq!(price.timestamp, convert_to_seconds(*timestamp));
                 had_prices = true;
@@ -180,7 +177,7 @@ fn prices_update_test(gap: u64, _description: &str) {
     }
     assert!(had_prices);
     assert!(had_gaps);
-    log!(&env, "{} iterations", iterations);
+    println!("{} iterations", iterations);
 }
 
 #[test]
