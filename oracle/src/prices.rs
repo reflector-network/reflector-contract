@@ -76,7 +76,7 @@ pub fn extract_update_record_prices(e: &Env, update: &PriceUpdate, total: u32) -
 }
 
 fn extract_single_update_record_price(update: &PriceUpdate, asset_index: u32) -> i128 {
-    let mut update_index = 0; //TODO: call extract_update_record_prices once and reuse results instead of calling extract_single_update_record_price multiple times for the same update.
+    let mut update_index = 0;
     for asset in 0..asset_index + 1 {
         if mapping::check_period_updated(&update.mask, asset) {
             if asset == asset_index {

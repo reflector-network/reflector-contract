@@ -3,7 +3,7 @@ use soroban_sdk::{Bytes, Vec};
 // Each history record occupies 32 bytes in history mask, allowing to store information for up to 256 recent periods
 const RECORD_SIZE: u32 = 32;
 const URECORD_SIZE: usize = 32;
-const MAX_HISTORY_SIZE: usize = 256 * 32; // 256 assets * 32 bytes
+const MAX_HISTORY_SIZE: usize = 256 * URECORD_SIZE; // 256 assets * 32 bytes
 
 // Update history records containing a bitmask of all prices recorded within the last update period
 pub fn update_history_mask(
@@ -25,8 +25,9 @@ pub fn update_history_mask(
         //copy existing history mask into buffer
         history_mask.copy_into_slice(&mut buffer[..mask_length]);
     }
+    //iterate through all updates and update corresponding history records in the buffer
     for (asset_index, price) in updates.iter().enumerate() {
-        //iterate through all updates and update corresponding history records in the buffer
+        //position in the mask
         let offset = asset_index * URECORD_SIZE;
 
         //256 bits as two 128 parts
@@ -34,7 +35,7 @@ pub fn update_history_mask(
         let mut lo = u128::from_be_bytes(buffer[offset + 16..offset + 32].try_into().unwrap());
 
         if lo > 0 || hi > 0 {
-            //shift left by the number of periods
+            //shift left by the number of skipped periods
             (hi, lo) = if updates_delta < 128 {
                 (
                     (hi << updates_delta) | (lo >> (128 - updates_delta)),
@@ -47,9 +48,9 @@ pub fn update_history_mask(
 
         //set lowest bit if price found
         if price > 0 {
-            let added = lo.overflowing_add(1);
-            lo = added.0;
-            if added.1 {
+            let (new_lo, carry) = lo.overflowing_add(1);
+            lo = new_lo;
+            if carry {
                 (hi, _) = hi.overflowing_add(1);
             }
         }
