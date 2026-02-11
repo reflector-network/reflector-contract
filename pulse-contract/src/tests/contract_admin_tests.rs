@@ -174,8 +174,6 @@ fn asset_update_overflow_test() {
 
     env.mock_all_auths();
 
-    env.cost_estimate().budget().reset_unlimited();
-
     let mut assets = Vec::new(&env);
     for i in 1..=1000 {
         assets.push_back(Asset::Other(Symbol::new(
@@ -194,8 +192,6 @@ fn price_update_overflow_test() {
         init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
 
     env.mock_all_auths();
-
-    env.cost_estimate().budget().reset_unlimited();
 
     let mut raw_prices = std::collections::VecDeque::new();
     for i in 1..=256 {

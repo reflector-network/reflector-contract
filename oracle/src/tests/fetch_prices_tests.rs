@@ -48,7 +48,7 @@ fn store_prices_test(
     set_ledger_timestamp(&e, 600_000);
 
     let mut assets = Vec::new(&e);
-    for i in 0..150 {
+    for i in 0..255 {
         assets.push_back(types::Asset::Other(Symbol::new(
             &e,
             &("ASSET_".to_string() + &i.to_string()),

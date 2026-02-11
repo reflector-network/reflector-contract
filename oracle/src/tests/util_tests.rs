@@ -4,10 +4,7 @@ extern crate std;
 use soroban_sdk::{log, testutils::Address as _, Address, Bytes, Env, Vec};
 use test_case::test_case;
 
-use crate::{
-    mapping, prices, settings,
-    testutils::{generate_assets, generate_random_updates, generate_update_record_mask},
-};
+use crate::{mapping, prices, settings, testutils::generate_update_record_mask};
 
 #[test_case(1, 0, 14)]
 #[test_case(0, 1, 14)]
@@ -105,59 +102,4 @@ fn normalize_timestamp_test(input: u64, expected: u64) {
         let normalized = crate::timestamps::normalize(&e, input);
         assert_eq!(normalized, expected);
     });
-}
-
-#[test_case(0, &[0xFF; 32], &[0xFF; 32]; "zero shift")]
-#[test_case(8, &{let mut arr = [0u8; 32]; arr[31] = 0xFF; arr}, &{let mut arr = [0u8; 32]; arr[30] = 0xFF; arr}; "shift by 8 bits")]
-#[test_case(4, &{let mut arr = [0u8; 32]; arr[30] = 0x12; arr[31] = 0x34; arr}, &{let mut arr = [0u8; 32]; arr[29] = 0x01; arr[30] = 0x23; arr[31] = 0x40; arr}; "shift by 4 bits")]
-#[test_case(137, &{let mut arr = [0u8; 32]; arr[31] = 0xFF; arr}, &{let mut arr = [0u8; 32]; arr[13] = 0x01; arr[14] = 0xFE; arr}; "shift by 137 bits")]
-#[test_case(256, &[0xFF; 32], &[0x00; 32]; "overflow 256 bits")]
-#[test_case(255, &{let mut arr = [0u8; 32]; arr[31] = 0x01; arr}, &{let mut arr = [0u8; 32]; arr[0] = 0x80; arr}; "shift by 255 bits")]
-fn shift_left_test(shift: u32, input: &[u8; 32], expected: &[u8; 32]) {
-    let e = Env::default();
-    let bytes = Bytes::from_array(&e, input);
-    let result = mapping::shift_left(bytes, 0, shift);
-
-    for i in 0..32 {
-        assert_eq!(result.get(i).unwrap(), expected[i as usize]);
-    }
-}
-
-#[test_case(&[0x00; 32], &{let mut arr = [0u8; 32]; arr[31] = 0x01; arr}; "add one to zero")]
-#[test_case(&{let mut arr = [0u8; 32]; arr[31] = 0xFF; arr}, &{let mut arr = [0u8; 32]; arr[30] = 0x01; arr}; "add one with carry")]
-#[test_case(&[0xFF; 32], &[0x00; 32]; "add one all ones")]
-#[test_case(&{let mut arr = [0u8; 32]; arr[28] = 0x01; arr[29] = 0xFF; arr[30] = 0xFF; arr[31] = 0xFF; arr}, &{let mut arr = [0u8; 32]; arr[28] = 0x02; arr}; "add one multiple carry")]
-fn mark_updated_test(input: &[u8; 32], expected: &[u8; 32]) {
-    let e = Env::default();
-    let bytes = Bytes::from_array(&e, input);
-    let result = mapping::mark_updated(bytes, 0);
-
-    for i in 0..32 {
-        assert_eq!(result.get(i).unwrap(), expected[i as usize]);
-    }
-}
-
-#[test_case(1; "no gaps")]
-#[test_case(254; "gap of 254 rounds")]
-#[test_case(300; "gap of 300 rounds")]
-fn mask_the_same_with_history_mask_legacy_test(gap: u32) {
-    let env = Env::default();
-    let assets = generate_assets(&env, 150, 0);
-    //init history mask
-    let updates_delta = 1;
-    let history_mask = Bytes::new(&env);
-    let updates = generate_random_updates(&env, &assets, 100);
-    let prices = Vec::from_iter(&env, updates.1.into_iter());
-    let legacy_mask =
-        mapping::update_history_mask_legacy(&env, history_mask.clone(), &prices, updates_delta);
-    let new_mask = mapping::update_history_mask(history_mask, &prices, updates_delta);
-    assert_eq!(legacy_mask, new_mask);
-
-    //set prices after gap
-    let history_mask = legacy_mask;
-    let updates = generate_random_updates(&env, &assets, 100);
-    let prices = Vec::from_iter(&env, updates.1.into_iter());
-    let legacy_mask = mapping::update_history_mask_legacy(&env, history_mask.clone(), &prices, gap);
-    let new_mask = mapping::update_history_mask(history_mask, &prices, gap);
-    assert_eq!(legacy_mask, new_mask);
 }

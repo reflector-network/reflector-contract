@@ -53,7 +53,7 @@ fn invalid_timestamp_update_test(ts: u64) {
 }
 
 #[test]
-fn price_update_test() {
+fn single_price_update_test() {
     let e = Env::default();
     //register contract to have storage available
     let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
