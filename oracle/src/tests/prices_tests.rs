@@ -42,7 +42,10 @@ fn invalid_timestamp_update_test(ts: u64) {
             &e,
             types::PriceUpdate {
                 prices: vec![&e, 12345678i128],
-                mask: generate_update_record_mask(&e, &vec![&e, 12345678i128]),
+                mask: generate_update_record_mask(
+                    &e,
+                    &std::collections::VecDeque::from([12345678i128]),
+                ),
             },
             ts,
         );
@@ -50,7 +53,7 @@ fn invalid_timestamp_update_test(ts: u64) {
 }
 
 #[test]
-fn price_update_test() {
+fn single_price_update_test() {
     let e = Env::default();
     //register contract to have storage available
     let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
@@ -79,7 +82,10 @@ fn price_update_test() {
             &e,
             types::PriceUpdate {
                 prices: vec![&e, 12345678i128],
-                mask: generate_update_record_mask(&e, &vec![&e, 12345678i128]),
+                mask: generate_update_record_mask(
+                    &e,
+                    &std::collections::VecDeque::from([12345678i128]),
+                ),
             },
             900_000,
         );

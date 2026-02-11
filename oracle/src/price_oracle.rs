@@ -333,7 +333,7 @@ impl PriceOracleContractBase {
         //prepare and publish update event
         events::publish_update_event(e, &asset_prices, &all, timestamp);
         //store new prices
-        prices::store_prices(e, &update, timestamp, &asset_prices);
+        prices::store_prices(e, update, timestamp, asset_prices);
     }
 
     // Update contract source code

@@ -8,11 +8,12 @@ use crate::{
 };
 use alloc::string::ToString;
 use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, Symbol, Vec};
+use std::collections::VecDeque;
 
-pub fn generate_update_record_mask(e: &Env, updates: &Vec<i128>) -> Bytes {
+pub fn generate_update_record_mask(e: &Env, updates: &VecDeque<i128>) -> Bytes {
     let mut mask = [0u8; 32];
     for (asset, price) in updates.iter().enumerate() {
-        if price > 0 {
+        if price > &0 {
             let (byte, bitmask) = mapping::resolve_period_update_mask_position(asset as u32);
             let i = byte as usize;
             let bytemask = mask[i] | bitmask;
@@ -38,16 +39,25 @@ pub fn generate_test_env() -> (ConfigData, Env) {
     (config, env)
 }
 
-pub fn generate_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> PriceUpdate {
-    let mut updates = Vec::new(&env);
+pub fn generate_updates(
+    env: &Env,
+    assets: &Vec<Asset>,
+    price: i128,
+) -> (PriceUpdate, VecDeque<i128>) {
+    let mut updates = VecDeque::new();
+    let mut filtered_price = Vec::new(&env);
     for _ in assets.iter() {
         updates.push_back(price);
+        filtered_price.push_back(price);
     }
     let mask = generate_update_record_mask(env, &updates);
-    PriceUpdate {
-        prices: updates,
-        mask,
-    }
+    (
+        PriceUpdate {
+            prices: filtered_price,
+            mask,
+        },
+        updates,
+    )
 }
 
 fn get_random_bool() -> bool {
@@ -60,17 +70,38 @@ fn get_random_bool() -> bool {
     random_bool
 }
 
-pub fn generate_random_updates(env: &Env, assets: &Vec<Asset>, price: i128) -> PriceUpdate {
-    let mut updates = Vec::new(&env);
+pub fn generate_random_updates(
+    env: &Env,
+    assets: &Vec<Asset>,
+    price: i128,
+) -> (PriceUpdate, VecDeque<i128>) {
+    let mut updates = VecDeque::new();
+    let mut filtered_price = Vec::new(&env);
+    let mut has_price = false;
     for _ in assets.iter() {
-        let price = if get_random_bool() { 0 } else { price };
+        //ensure that at least one price is set
+        let price = if (has_price || updates.len() < assets.len() as usize - 1) && get_random_bool()
+        {
+            0
+        } else {
+            price
+        };
         updates.push_back(price);
+        if price > 0 {
+            filtered_price.push_back(price);
+        }
+        if price > 0 {
+            has_price = true;
+        }
     }
     let mask = generate_update_record_mask(env, &updates);
-    PriceUpdate {
-        prices: updates,
-        mask,
-    }
+    (
+        PriceUpdate {
+            prices: filtered_price,
+            mask,
+        },
+        updates,
+    )
 }
 
 pub fn generate_assets(e: &Env, count: usize, start_index: u32) -> Vec<Asset> {

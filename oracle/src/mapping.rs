@@ -1,57 +1,67 @@
-use soroban_sdk::{Bytes, Env, Vec, U256};
+use soroban_sdk::{Bytes, Vec};
 
 // Each history record occupies 32 bytes in history mask, allowing to store information for up to 256 recent periods
 const RECORD_SIZE: u32 = 32;
+const URECORD_SIZE: usize = 32;
+const MAX_HISTORY_SIZE: usize = 256 * URECORD_SIZE; // 256 assets * 32 bytes
 
 // Update history records containing a bitmask of all prices recorded within the last update period
 pub fn update_history_mask(
-    e: &Env,
-    mut history_mask: Bytes,
+    history_mask: Bytes,
     updates: &Vec<i128>,
     mut updates_delta: u32,
 ) -> Bytes {
-    let one = U256::from_u32(e, 1);
-    //wipe entire history if the gap between updates is too large
-    if updates_delta > 255 {
-        history_mask = Bytes::new(e); //start with an empty mask
-        updates_delta = 1;
-    }
+    //create a buffer that can hold the entire history mask
+    let mut buffer = [0u8; MAX_HISTORY_SIZE];
+    let mask_length = history_mask.len() as usize;
+
     if updates_delta < 1 {
         updates_delta = 1; //this should never happen, but just in case
     }
-    //iterate through all updates
+    if updates_delta > 255 {
+        //entire history is obsolete - ignore
+        updates_delta = 1; //reset delta to 1
+    } else {
+        //copy existing history mask into buffer
+        history_mask.copy_into_slice(&mut buffer[..mask_length]);
+    }
+    //iterate through all updates and update corresponding history records in the buffer
     for (asset_index, price) in updates.iter().enumerate() {
-        //locate particular asset mask slice position within entire history record
-        let from = asset_index as u32 * RECORD_SIZE;
-        let to = from + RECORD_SIZE;
-        //retrieve previous asset mask
-        let mut bitmask = if history_mask.len() >= to {
-            let encoded = history_mask.slice(from..to);
-            U256::from_be_bytes(e, &encoded)
-        } else {
-            U256::from_u32(e, 0) //no previous records for this asset found
-        };
-        //shift existing mask to the left by the number of periods since the last update
-        //all mask bits older than 256 periods get evicted
-        bitmask = bitmask.shl(updates_delta);
-        //set corresponding bit if price found
-        if price > 0 {
-            bitmask = bitmask.add(&one);
+        //position in the mask
+        let offset = asset_index * URECORD_SIZE;
+
+        //256 bits as two 128 parts
+        let mut hi = u128::from_be_bytes(buffer[offset..offset + 16].try_into().unwrap());
+        let mut lo = u128::from_be_bytes(buffer[offset + 16..offset + 32].try_into().unwrap());
+
+        if lo > 0 || hi > 0 {
+            //shift left by the number of skipped periods
+            (hi, lo) = if updates_delta < 128 {
+                (
+                    (hi << updates_delta) | (lo >> (128 - updates_delta)),
+                    lo << updates_delta,
+                )
+            } else {
+                (lo << (updates_delta & 0x7f), 0)
+            };
         }
-        //encode into bytes again
-        let encoded = bitmask.to_be_bytes();
-        //write to the history
-        if history_mask.len() <= from {
-            //that's new asset, add to the mask
-            history_mask.append(&encoded);
-        } else {
-            //replace bytes
-            for i in 0..RECORD_SIZE {
-                history_mask.set(from + i, encoded.get(i).unwrap());
+
+        //set lowest bit if price found
+        if price > 0 {
+            let (new_lo, carry) = lo.overflowing_add(1);
+            lo = new_lo;
+            if carry {
+                (hi, _) = hi.overflowing_add(1);
             }
         }
+        //write back to buffer
+        buffer[offset..offset + 16].copy_from_slice(&hi.to_be_bytes());
+        buffer[offset + 16..offset + 32].copy_from_slice(&lo.to_be_bytes());
     }
-    history_mask //return updated history
+
+    //get total size of updated history mask based on the number of assets and return as Bytes
+    let updates_length = mask_length.max(updates.len() as usize * URECORD_SIZE);
+    Bytes::from_slice(history_mask.env(), &buffer[..updates_length])
 }
 
 // Check whether asset price has been quoted for a certain period based on history records bitmask
@@ -61,9 +71,9 @@ pub fn check_history_updated(history_mask: &Bytes, asset_index: u32, period: u32
     //and calculate specific bit that we need to check
     let bit = 1 << (period % 8);
     //retrieve byte from array
-    let bytemask = history_mask.get(from).unwrap_or_default();
+    let encoded_byte = history_mask.get(from).unwrap_or_default();
     //compare with bit mask
-    bytemask & bit == bit
+    encoded_byte & bit == bit
 }
 
 // Check whether price update record contains update for given asset by its index

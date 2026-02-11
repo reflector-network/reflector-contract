@@ -44,7 +44,7 @@ fn position_encoding_bitmask_test() {
             };
             updates.push_back(price);
         }
-        mask = mapping::update_history_mask(&e, mask, &updates, 1);
+        mask = mapping::update_history_mask(mask, &updates, 1);
     }
     log!(&e, "entire mask", mask);
 
@@ -70,21 +70,21 @@ fn update_record_bitmask_test() {
     let e = Env::default();
     let iterations = 70;
 
-    let mut updates = Vec::from_array(&e, [0i128; 254]);
+    let mut updates = std::collections::VecDeque::from([0i128; 254]);
     for i in 0..iterations {
         for asset_index in 0..updates.len() {
             let price = match i & asset_index == 0 {
                 true => 1,
                 _ => 0,
             };
-            updates.set(asset_index, price);
+            updates[asset_index] = price;
         }
         let mask = generate_update_record_mask(&e, &updates);
         //log!(&e, "entire mask", mask);
         for (asset_index, price) in updates.iter().enumerate() {
             assert_eq!(
                 mapping::check_period_updated(&mask, asset_index as u32),
-                price > 0
+                price > &0
             );
         }
     }

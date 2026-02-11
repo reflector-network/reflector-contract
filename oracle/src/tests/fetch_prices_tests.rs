@@ -48,7 +48,7 @@ fn store_prices_test(
     set_ledger_timestamp(&e, 600_000);
 
     let mut assets = Vec::new(&e);
-    for i in 0..10 {
+    for i in 0..255 {
         assets.push_back(types::Asset::Other(Symbol::new(
             &e,
             &("ASSET_".to_string() + &i.to_string()),
@@ -65,9 +65,10 @@ fn store_prices_test(
         fn set_price(e: &Env, timestamp: u64, assets: &Vec<types::Asset>) {
             let updates = generate_updates(e, &assets, 100);
             let asset_prices = prices::extract_update_record_prices(e, &updates, assets.len());
+            let legacy_update = updates.prices.clone();
             //store history timestamps for all assets
             prices::update_history_mask(e, &asset_prices, timestamp);
-            prices::store_prices(e, &updates, timestamp, &updates.prices.clone());
+            prices::store_prices(e, updates, timestamp, legacy_update);
         }
 
         let mut timestamp = first_timestamp;
@@ -93,4 +94,6 @@ fn store_prices_test(
             expected_first_price_ts / 1000
         );
     });
+
+    e.cost_estimate().budget().print();
 }
