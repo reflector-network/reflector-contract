@@ -99,6 +99,23 @@ impl PulseOracleContract {
         PriceOracleContractBase::expires(e, asset)
     }
 
+    // Estimates amount of fee tokens required to extend the asset retention config for a given time
+    //
+    // # Arguments
+    //
+    // * `period` - Desired retention period extension (in seconds)
+    //
+    // # Returns
+    //
+    // Fee asset and estimated amount required for the fee bump
+    //
+    // # Panics
+    //
+    // Panics if the asset is not supported or if retention config is malformed/missing
+    pub fn estimate_retention_cost(e: &Env, period: u64) -> (Address, i128) {
+        PriceOracleContractBase::estimate_retention_cost(e, period)
+    }
+
     // Extends the asset expiration date by a given amount of tokens.
     //
     // # Arguments
@@ -107,17 +124,21 @@ impl PulseOracleContract {
     // * `asset` - Quoted asset
     // * `amount` - Amount of tokens to burn for extending the expiration date
     //
+    // # Returns
+    //
+    // Current asset expiration timestamp (in seconds)
+    //
     // # Panics
     //
     // Panics if the asset is not supported or if retention config is malformed/missing
-    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) {
+    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) -> u64 {
         PriceOracleContractBase::extend_asset_ttl(
             e,
             sponsor,
             asset,
             amount,
             INITIAL_EXPIRATION_PERIOD,
-        );
+        )
     }
 
     // Return the fee token address daily price feed retainer fee amount

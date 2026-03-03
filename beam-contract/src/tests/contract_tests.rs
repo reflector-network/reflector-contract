@@ -4,7 +4,7 @@ extern crate std;
 use crate::{BeamOracleContract, BeamOracleContractClient};
 use oracle::testutils::register_token;
 use oracle::types::{Asset, FeeConfig};
-use oracle::{assets, init_contract_with_admin};
+use oracle::{assets, init_contract_with_admin, timestamps};
 use soroban_sdk::{testutils::Address as _, Address, Vec};
 use test_case::test_case;
 
@@ -87,9 +87,18 @@ fn check_extending_asset_ttl() {
     let sponsor = Address::generate(&env);
     fee_token_client.mint(&sponsor, &10_000_000);
 
-    //check the extending
-    client.extend_asset_ttl(&sponsor, &new_asset, &1_000_000);
-    assert_eq!(client.expires(&new_asset), Some(87_300));
+    //estimate bump cost for 1 day
+    let day = 24 * 60 * 60u64;
+    let amount = client.estimate_retention_cost(&day);
+    assert_eq!(amount.0, fee_token_client.address);
+    assert_eq!(amount.1, 1_000_000);
+
+    //check bump
+    let current_expiration = client.expires(&new_asset).unwrap();
+    assert_eq!(current_expiration, 0);
+    let ttl = client.extend_asset_ttl(&sponsor, &new_asset, &amount.1);
+    assert_eq!(ttl, client.expires(&new_asset).unwrap());
+    assert_eq!(ttl, timestamps::ledger_timestamp(&env) / 1000 + day);
 
     //check that expiration records length matches assets length
     env.as_contract(&client.address, || {

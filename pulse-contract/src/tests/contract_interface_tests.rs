@@ -197,10 +197,16 @@ fn extend_asset_ttl_test() {
     let asset = &init_data.assets.first_unchecked();
     let initial_expiration = client.expires(&asset).unwrap();
 
-    //extend TTL by 10 day (864000 seconds)
-    client.extend_asset_ttl(&sponsor, &asset, &10_000_000);
+    //estimate bump cost for 10 day (864000 seconds)
+    let ten_days = 10 * 24 * 60 * 60u64;
+    let amount = client.estimate_retention_cost(&ten_days);
+    assert_eq!(amount.0, fee_token.address);
+    assert_eq!(amount.1, 10_000_000);
+
+    //extend TTL
+    let ttl = client.extend_asset_ttl(&sponsor, &asset, &amount.1);
+    assert_eq!(ttl, client.expires(&asset).unwrap());
 
     //verify new expiration
-    let new_expiration = client.expires(&asset).unwrap();
-    assert_eq!(new_expiration, initial_expiration + 864000);
+    assert_eq!(ttl, initial_expiration + 864000);
 }

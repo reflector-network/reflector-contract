@@ -96,7 +96,7 @@ impl PriceOracleContractBase {
     //
     // # Returns
     //
-    // Asset expiration timestamp (in seconds) or None if asset is not supported
+    // Asset expiration timestamp (in seconds) or None if asset is expired
     //
     // # Panics
     //
@@ -108,6 +108,23 @@ impl PriceOracleContractBase {
         }
     }
 
+    // Estimates amount of fee tokens required to extend the asset retention config for a given time
+    //
+    // # Arguments
+    //
+    // * `period` - Desired retention period extension (in seconds)
+    //
+    // # Returns
+    //
+    // Fee asset and estimated amount required for the fee bump
+    //
+    // # Panics
+    //
+    // Panics if the asset is not supported or if retention config is malformed/missing
+    pub fn estimate_retention_cost(e: &Env, period: u64) -> (Address, i128) {
+        assets::estimate_retention_cost(e, period * 1000)
+    }
+
     // Extends the asset expiration date by a given amount of tokens.
     //
     // # Arguments
@@ -116,6 +133,10 @@ impl PriceOracleContractBase {
     // * `asset` - Quoted asset
     // * `amount` - Amount of tokens to burn for extending the expiration date
     // * `initial_expiration_period` - Initial expiration period for new assets (in days)
+    //
+    // # Returns
+    //
+    // Current asset expiration timestamp (in seconds)
     //
     // # Panics
     //
@@ -126,10 +147,11 @@ impl PriceOracleContractBase {
         asset: Asset,
         amount: i128,
         initial_expiration_period: u32,
-    ) {
+    ) -> u64 {
         //check sponsor authorization
         sponsor.require_auth();
-        assets::extend_ttl(e, sponsor, asset, amount, initial_expiration_period);
+        //extend and return current TTL
+        assets::extend_ttl(e, sponsor, asset, amount, initial_expiration_period) / 1000
     }
 
     // Return the fee token address daily price feed retainer fee amount

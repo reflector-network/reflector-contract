@@ -7,6 +7,7 @@ const ASSET_LIMIT: u32 = 256;
 //storage keys
 const ASSETS_KEY: &str = "assets";
 const EXPIRATION_KEY: &str = "expiration";
+const DAY: i128 = 86400000;
 
 fn get_expiration_timestamp(e: &Env, initial_expiration_period: u32) -> u64 {
     if initial_expiration_period > 0 {
@@ -88,7 +89,7 @@ pub fn extend_ttl(
     asset: Asset,
     amount: i128,
     initial_expiration_period: u32,
-) {
+) -> u64 {
     //check if the amount is valid
     if amount <= 0 {
         e.panic_with_error(Error::InvalidAmount);
@@ -100,24 +101,14 @@ pub fn extend_ttl(
     }
     let asset_index = asset_index.unwrap();
     //load required fee amount from retention config
-    let (xrf, fee) = match settings::get_fee_config(e) {
-        FeeConfig::Some(fee_data) => {
-            if fee_data.1 <= 0 {
-                e.panic_with_error(Error::InvalidConfig);
-            }
-            fee_data
-        }
-        FeeConfig::None => {
-            e.panic_with_error(Error::InvalidConfig);
-        }
-    };
-    //burn corresponding amount of fee tokens
-    TokenClient::new(&e, &xrf).burn(&sponsor, &amount);
+    let (xrf, fee) = load_fee_settings(e);
     //calculate extension period
-    let bump = amount * 86400000 / fee; // in milliseconds
+    let bump = amount * DAY / fee; // in milliseconds
     if bump <= 0 {
         e.panic_with_error(Error::InvalidAmount);
     }
+    //burn corresponding amount of fee tokens
+    TokenClient::new(&e, &xrf).burn(&sponsor, &amount);
     //load expiration info
     let mut expiration = load_expiration_records(e);
     let now = timestamps::ledger_timestamp(&e);
@@ -133,7 +124,32 @@ pub fn extend_ttl(
     //write into the vector that holds expiration dates for all symbols
     expiration.set(asset_index, asset_expiration);
     //update expiration records in instance storage
-    set_expirations_records(e, &expiration)
+    set_expirations_records(e, &expiration);
+    //return current asset TTL
+    asset_expiration
+}
+
+// Estimate amount of fee tokens required to bump the retention for a given time (in milliseconds)
+pub fn estimate_retention_cost(e: &Env, bump: u64) -> (Address, i128) {
+    //load daily retention cost from config
+    let (xrf, fee) = load_fee_settings(e);
+    let amount = bump as i128 * fee / DAY;
+    (xrf, amount)
+}
+
+// Load current asset retention fee settings
+fn load_fee_settings(e: &Env) -> (Address, i128) {
+    match settings::get_fee_config(e) {
+        FeeConfig::Some(fee_data) => {
+            if fee_data.1 <= 0 {
+                e.panic_with_error(Error::InvalidConfig);
+            }
+            fee_data
+        }
+        FeeConfig::None => {
+            e.panic_with_error(Error::InvalidConfig);
+        }
+    }
 }
 
 // Load expiration data for all assets
