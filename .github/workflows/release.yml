@@ -5,11 +5,26 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  id-token: write
+  contents: write
+  attestations: write
+    
 jobs:
-  release-contract:
+  beam-release-contract:
     uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
     with:
       release_name: ${{ github.ref_name }}
-      release_description: 'Contract release'
+      release_description: 'Beam contract release'
+      package: "reflector-beam-contract"
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  pulse-release-contract:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: 'Pulse contract release'
+      package: "reflector-pulse-contract"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
