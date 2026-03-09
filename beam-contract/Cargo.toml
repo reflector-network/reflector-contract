@@ -1,0 +1,16 @@
+[package]
+name = "reflector-beam-contract"
+version = "6.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+oracle = { path = "../oracle" }
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"]  }
+test-case = "*"
+oracle = { path = "../oracle", features = ["testutils"] }

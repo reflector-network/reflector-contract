@@ -1,4 +1,4 @@
+/.idea
 /.soroban
-/target
-/price-oracle/test_snapshots
-/test_snapshots
+target
+test_snapshots

@@ -1,10 +1,11 @@
-[package]
-name = "reflector-oracle"
-version = "4.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
 
-[lib]
-crate-type = ["cdylib"]
+members = ["oracle", "pulse-contract", "beam-contract"]
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
 
 [profile.release]
 opt-level = "z"
@@ -16,15 +17,5 @@ panic = "abort"
 codegen-units = 1
 lto = true
 
-[dependencies]
-soroban-sdk = "20.3.2"
-
-[dev_dependencies]
-soroban-sdk = { version = "20.3.2", features = ["testutils"] }
-
-[features]
-testutils = ["soroban-sdk/testutils"]
-
-[profile.release-with-logs]
-inherits = "release"
-debug-assertions = true
+[workspace.dependencies.soroban-sdk]
+version = "25.3.0"
