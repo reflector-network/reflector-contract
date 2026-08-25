@@ -28,7 +28,7 @@ Reflector offers two data access models for Stellar on-chain oracles:
 
 - **ReflectorPulse** oracles with a uniform 5-minute update interval provide free access to published price feeds
 - **ReflectorBeam** oracles allow flexible oracle provisioning and feature faster price updates for subscribers with
-  prepaid timed per-asset access purchased with XRF
+  prepaid time-bound per-asset access purchased with XRF
 
 Both contract implementations are compatible with the
 [SEP-40](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0040.md) ecosystem standard.
@@ -192,23 +192,18 @@ pub enum Error {
 ```
 ### ReflectorBeam contract
 
-Beam oracles use a prepaid access model. Before reading prices, an account (or a sponsor
-acting on its behalf) purchases timed access to the assets it needs with a single call:
+Beam oracles use a prepaid access model. Before reading prices, a consumer (or a sponsor
+acting on its behalf) purchases time-bound asset price feeds access it needs with a single call:
 
-- `track(sponsor, account, assets, amount)` — burns `amount` XRF from `sponsor`, splits it
+- `track(sponsor, consumer, assets, amount)` — burns `amount` XRF from `sponsor`, splits it
   evenly between the listed assets, and converts each share to access time for `account` at
-  the daily rate: `time = (amount ÷ assets_count) × 1 day ÷ daily_fee`, floored at each
+  the daily rate: `time = (amount / assets_count) x 1 day / daily_fee`, floored at each
   division step. The purchased time is added on top of the remaining access (or counted
   from now when the access has lapsed), and the new access expiration timestamps are
   returned, one per asset.
-- `tracked_until(account, asset)` — current access expiration unix timestamp (in seconds),
-  0 if none was ever tracked.
 - Read prices with `price()`, `lastprice()`, `prices()` while the access is active.
-
-Note: contract storage entries have a maximum rent horizon (~6 months of ledgers). For access
-periods purchased far beyond it, the account's access entry may be archived before the access
-expires — any subsequent `track()` (or a standard entry restore) makes it live again; no
-access is lost.
+- `tracked_until(consumer, assets)` — current access expiration UNIX timestamp (in seconds),
+  0 if none was ever tracked.
 
 Follow this example to invoke oracle functions from your contract code.
 
@@ -342,12 +337,11 @@ pub trait Contract {
     fn admin() -> Option<Address>;
     // Get asset expiration timestamp
     fn expires(asset: Asset) -> Option<u64>;
-    // Purchase timed access to the assets for the account; the amount is burned from
-    // the sponsor and split evenly between the assets. Returns new access expiration
-    // unix timestamps (in seconds), one per requested asset
-    fn track(sponsor: Address, account: Address, assets: Vec<Asset>, amount: i128) -> Vec<u64>;
-    // Get access expiration unix timestamp (in seconds) for the account and asset, 0 if none
-    fn tracked_until(account: Address, asset: Asset) -> u64;
+    // Purchase access to asset price feeds (the XRF amount charged from the sponsor and split evenly between all assets).
+    // Returns new access expiration UNIX timestamps (in seconds) for each requested asset
+    fn track(sponsor: Address, consumer: Address, assets: Vec<Asset>, amount: i128) -> Vec<u64>;
+    // Get access expiration UNIX timestamp (in seconds) for the given consumer and assets
+    fn tracked_until(consumer: Address, asset: Asset) -> u64;
 }
 
 // Quoted asset definition

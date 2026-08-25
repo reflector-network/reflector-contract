@@ -104,21 +104,19 @@ impl BeamOracleContract {
         PriceOracleContractBase::expires(e, asset)
     }
 
-    // Purchase timed access to the given assets for the account.
-    // The amount of fee tokens is burned from the sponsor, split evenly between
-    // the assets, and converted to access time at the daily rate. The feed
-    // expiration is extended to cover the purchased access
+    // Purchase access to asset price feeds (XRF token amount charged from the sponsor and split evenly
+    // between all assets). Feed expiration is automatically extended to cover the purchased access.
     //
     // # Arguments
     //
     // * `sponsor` - Address that pays for the access
-    // * `account` - Account that receives the access
+    // * `consumer` - Address that receives the access
     // * `assets` - Assets to track (must be supported, no duplicates)
     // * `amount` - Amount of fee tokens to burn
     //
     // # Returns
     //
-    // New access expiration timestamps (in seconds), one per requested asset
+    // New access expiration UNIX timestamps (in seconds) for each requested asset
     //
     // # Panics
     //
@@ -126,25 +124,25 @@ impl BeamOracleContract {
     pub fn track(
         e: &Env,
         sponsor: Address,
-        account: Address,
+        consumer: Address,
         assets: Vec<Asset>,
         amount: i128,
     ) -> Vec<u64> {
-        access::track(e, sponsor, account, assets, amount)
+        access::track(e, sponsor, consumer, assets, amount)
     }
 
-    // Return access expiration timestamp for the account and asset
+    // Return access expiration UNIX timestamp (in seconds) for the given consumer and assets
     //
     // # Arguments
     //
-    // * `account` - Account to check
-    // * `asset` - Asset to check
+    // * `consumer` - Caller address to check access for
+    // * `assets` - Assets to check
     //
     // # Returns
     //
-    // Access expiration unix timestamp (in seconds), 0 if no access was tracked
-    pub fn tracked_until(e: &Env, account: Address, asset: Asset) -> u64 {
-        access::access_until(e, account, asset)
+    // Access expiration UNIX timestamp (in seconds) for each asset, 0 if no access was tracked
+    pub fn tracked_until(e: &Env, consumer: Address, assets: Vec<Asset>) -> Vec<u64> {
+        access::access_until(e, consumer, assets)
     }
 
     // Return fee token address daily price feed retainer fee amount

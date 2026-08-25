@@ -108,27 +108,38 @@ fn normalize_timestamp_test(input: u64, expected: u64) {
 }
 
 #[test]
-fn ensure_expiration_test() {
+fn ensure_expirations_test() {
     let e = Env::default();
     //register contract to have storage available
     let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
     e.as_contract(&contract.address(), || {
-        //add two assets with zero initial expiration
-        let test_assets = generate_assets(&e, 2, 0);
+        //add three assets with zero initial expiration
+        let test_assets = generate_assets(&e, 3, 0);
         assets::add_assets(&e, test_assets.clone(), 0);
         //bump expiration for the first asset
-        assets::ensure_expiration(&e, 0, 5_000);
+        assets::ensure_expirations(&e, &Vec::from_array(&e, [(0u32, 5_000u64)]));
         assert_eq!(
             assets::expires(&e, test_assets.get_unchecked(0)),
             Some(5_000)
         );
-        //smaller value must not decrease expiration
-        assets::ensure_expiration(&e, 0, 1_000);
+        //a batch applies every update independently, and a smaller value never
+        //decreases the expiration already recorded for the asset
+        assets::ensure_expirations(&e, &Vec::from_array(&e, [(0u32, 1_000u64), (1, 9_000)]));
         assert_eq!(
             assets::expires(&e, test_assets.get_unchecked(0)),
             Some(5_000)
         );
-        //second asset untouched
-        assert_eq!(assets::expires(&e, test_assets.get_unchecked(1)), Some(0));
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(1)),
+            Some(9_000)
+        );
+        //assets missing from the batch are untouched
+        assert_eq!(assets::expires(&e, test_assets.get_unchecked(2)), Some(0));
+        //an empty batch is a no-op
+        assets::ensure_expirations(&e, &Vec::new(&e));
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(1)),
+            Some(9_000)
+        );
     });
 }

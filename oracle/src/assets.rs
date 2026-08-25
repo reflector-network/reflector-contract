@@ -129,14 +129,21 @@ pub fn extend_ttl(
     asset_expiration
 }
 
-// Ensure the asset feed expiration covers the given timestamp (no fee charged)
-pub fn ensure_expiration(e: &Env, asset_index: u32, until: u64) {
+// Ensure asset feed expirations cover the given timestamps.
+// Takes (asset index, expiration timestamp) pairs and touches the storage entry once
+pub fn ensure_expirations(e: &Env, updates: &Vec<(u32, u64)>) {
     let mut expiration = load_expiration_records(e);
-    if expiration.get(asset_index).unwrap_or(0) >= until {
-        return; //already covered
+    let mut modified = false;
+    for (asset_index, until) in updates.iter() {
+        if expiration.get(asset_index).unwrap_or(0) >= until {
+            continue; //already covered
+        }
+        expiration.set(asset_index, until);
+        modified = true;
     }
-    expiration.set(asset_index, until);
-    set_expirations_records(e, &expiration);
+    if modified {
+        set_expirations_records(e, &expiration);
+    }
 }
 
 // Estimate amount of fee tokens required to bump the retention for a given time (in milliseconds)

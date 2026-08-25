@@ -40,7 +40,7 @@ fn track_test() {
 
     //track event is published
     let expected_event = TrackEvent {
-        account: account.clone(),
+        consumer: account.clone(),
         sponsor: sponsor.clone(),
         amount: 60_000_000,
         assets: {
@@ -59,8 +59,13 @@ fn track_test() {
     assert_eq!(fee_token.balance(&sponsor), 40_000_000);
 
     //the view reflects the purchased access
-    assert_eq!(client.tracked_until(&account, &asset0), expected);
-    assert_eq!(client.tracked_until(&account, &asset1), expected);
+    assert_eq!(
+        client.tracked_until(
+            &account,
+            &Vec::from_array(&env, [asset0.clone(), asset1.clone()])
+        ),
+        Vec::from_array(&env, [expected, expected])
+    );
     //feed expiration is bumped to cover the purchased access
     assert_eq!(client.expires(&asset0), Some(expected));
 
@@ -73,10 +78,15 @@ fn track_test() {
     );
     let extended = 900 + 40 * day;
     assert_eq!(ttls, Vec::from_array(&env, [extended]));
-    assert_eq!(client.tracked_until(&account, &asset0), extended);
     assert_eq!(client.expires(&asset0), Some(extended));
     //the other asset keeps its earlier expiration
-    assert_eq!(client.tracked_until(&account, &asset1), expected);
+    assert_eq!(
+        client.tracked_until(
+            &account,
+            &Vec::from_array(&env, [asset0.clone(), asset1.clone()])
+        ),
+        Vec::from_array(&env, [extended, expected])
+    );
     assert_eq!(fee_token.balance(&sponsor), 30_000_000);
 }
 
@@ -127,7 +137,10 @@ fn track_after_expiration_test() {
         &Vec::from_array(&env, [asset0.clone()]),
         &1_000_000,
     );
-    assert_eq!(client.tracked_until(&account, &asset0), 900 + day);
+    assert_eq!(
+        client.tracked_until(&account, &Vec::from_array(&env, [asset0.clone()])),
+        Vec::from_array(&env, [900 + day])
+    );
 
     //well past the expiration the new access extends from now, not from the stale ttl
     set_ledger_timestamp(&env, 900 + 2 * day);
@@ -138,7 +151,10 @@ fn track_after_expiration_test() {
         &1_000_000,
     );
     assert_eq!(ttls, Vec::from_array(&env, [900 + 3 * day]));
-    assert_eq!(client.tracked_until(&account, &asset0), 900 + 3 * day);
+    assert_eq!(
+        client.tracked_until(&account, &Vec::from_array(&env, [asset0.clone()])),
+        Vec::from_array(&env, [900 + 3 * day])
+    );
 }
 
 #[test]
@@ -151,9 +167,13 @@ fn access_until_untracked_test() {
     //unknown account has no access
     let account = Address::generate(&env);
     let asset0 = init_data.assets.get_unchecked(0);
-    assert_eq!(client.tracked_until(&account, &asset0), 0);
+    let asset1 = init_data.assets.get_unchecked(1);
+    let day = 24 * 60 * 60u64;
+    assert_eq!(
+        client.tracked_until(&account, &Vec::from_array(&env, [asset0.clone()])),
+        Vec::from_array(&env, [0u64])
+    );
 
-    //account with access to one asset has none for another
     fee_token.mint(&account, &1_000_000);
     client.track(
         &account,
@@ -161,12 +181,22 @@ fn access_until_untracked_test() {
         &Vec::from_array(&env, [asset0.clone()]),
         &1_000_000,
     );
-    let asset1 = init_data.assets.get_unchecked(1);
-    assert_eq!(client.tracked_until(&account, &asset1), 0);
-
-    //unsupported asset reports no access instead of panicking
+    //an account with access to one asset has none for another, and an unsupported
+    //asset reports no access instead of panicking - results are positional
     let unknown = Asset::Stellar(Address::generate(&env));
-    assert_eq!(client.tracked_until(&account, &unknown), 0);
+    assert_eq!(
+        client.tracked_until(
+            &account,
+            &Vec::from_array(&env, [asset1.clone(), asset0.clone(), unknown.clone()])
+        ),
+        Vec::from_array(&env, [0, 900 + day, 0])
+    );
+
+    //empty asset list yields an empty result
+    assert_eq!(
+        client.tracked_until(&account, &Vec::new(&env)),
+        Vec::<u64>::new(&env)
+    );
 }
 
 #[test]
@@ -287,6 +317,189 @@ fn track_without_fee_config_test() {
         &Vec::from_array(&env, [asset0]),
         &1_000_000,
     );
+}
+
+//read the raw access entry size to observe records that the public interface hides
+fn access_entry_size(
+    env: &soroban_sdk::Env,
+    client: &BeamOracleContractClient,
+    address: &Address,
+) -> u32 {
+    env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .get::<Address, Map<u32, u64>>(address)
+            .map(|access| access.len())
+            .unwrap_or(0)
+    })
+}
+
+#[test]
+fn track_prunes_expired_access_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &100_000_000);
+    let asset0 = init_data.assets.get_unchecked(0);
+    let asset1 = init_data.assets.get_unchecked(1);
+    let day = 24 * 60 * 60u64;
+
+    //one day of access for the first asset, thirty days for the second one
+    client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [asset0.clone()]),
+        &FEE,
+    );
+    client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [asset1.clone()]),
+        &(30 * FEE),
+    );
+    assert_eq!(access_entry_size(&env, &client, &account), 2);
+
+    //once the first asset access lapses, the next track drops the stale record
+    set_ledger_timestamp(&env, 900 + 2 * day);
+    client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [asset1.clone()]),
+        &FEE,
+    );
+    assert_eq!(access_entry_size(&env, &client, &account), 1);
+    //pruning does not touch the record that is still active
+    assert_eq!(
+        client.tracked_until(
+            &account,
+            &Vec::from_array(&env, [asset1.clone(), asset0.clone()])
+        ),
+        Vec::from_array(&env, [900 + 31 * day, 0])
+    );
+}
+
+//the tests above run with env-level auth mocking, which would hide a missing
+//require_auth call - these two invoke the contract without any mocked auth
+#[test]
+fn track_requires_sponsor_auth_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, false);
+    let fee_token = register_token(&env, &init_data.admin);
+    client
+        .mock_all_auths()
+        .set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let sponsor = Address::generate(&env);
+    let account = Address::generate(&env);
+    fee_token.mock_all_auths().mint(&sponsor, &10_000_000);
+    let assets = Vec::from_array(&env, [init_data.assets.get_unchecked(0)]);
+
+    //an unsigned request is rejected before anything is burned or granted
+    assert!(client.try_track(&sponsor, &account, &assets, &FEE).is_err());
+    assert_eq!(fee_token.balance(&sponsor), 10_000_000);
+    assert_eq!(
+        client.tracked_until(&account, &assets),
+        Vec::from_array(&env, [0u64])
+    );
+
+    //the same request goes through once the sponsor authorizes it
+    client
+        .mock_all_auths()
+        .track(&sponsor, &account, &assets, &FEE);
+    assert_eq!(fee_token.balance(&sponsor), 10_000_000 - FEE);
+}
+
+#[test]
+fn read_requires_consumer_auth_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, false);
+    let fee_token = register_token(&env, &init_data.admin);
+    client
+        .mock_all_auths()
+        .set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mock_all_auths().mint(&account, &FEE);
+    let asset = init_data.assets.get_unchecked(0);
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.mock_all_auths().set_price(&updates.0, &600_000);
+    client.mock_all_auths().track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [asset.clone()]),
+        &FEE,
+    );
+
+    //the access is active
+    assert_eq!(
+        client.tracked_until(&account, &Vec::from_array(&env, [asset.clone()])),
+        Vec::from_array(&env, [900 + 24 * 60 * 60])
+    );
+    //...yet every read still requires the consumer signature
+    assert!(client.try_lastprice(&account, &asset).is_err());
+    assert!(client.try_price(&account, &asset, &600).is_err());
+    assert!(client.try_prices(&account, &asset, &1).is_err());
+    //a signed read succeeds
+    assert!(client
+        .mock_all_auths()
+        .lastprice(&account, &asset)
+        .is_some());
+}
+
+#[test]
+fn sponsor_pays_consumer_reads_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let sponsor = Address::generate(&env);
+    let account = Address::generate(&env);
+    fee_token.mint(&sponsor, &FEE);
+    let asset = init_data.assets.get_unchecked(0);
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &600_000);
+    client.track(
+        &sponsor,
+        &account,
+        &Vec::from_array(&env, [asset.clone()]),
+        &FEE,
+    );
+
+    //the consumer reads prices with the access the sponsor paid for
+    assert!(client.lastprice(&account, &asset).is_some());
+    //while the sponsor gets no access of its own
+    assert_eq!(
+        client.tracked_until(&sponsor, &Vec::from_array(&env, [asset.clone()])),
+        Vec::from_array(&env, [0u64])
+    );
+    assert_eq!(access_entry_size(&env, &client, &sponsor), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #102)")]
+fn sponsor_read_denied_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let sponsor = Address::generate(&env);
+    let account = Address::generate(&env);
+    fee_token.mint(&sponsor, &FEE);
+    let asset = init_data.assets.get_unchecked(0);
+    client.track(
+        &sponsor,
+        &account,
+        &Vec::from_array(&env, [asset.clone()]),
+        &FEE,
+    );
+
+    //paying for someone else does not entitle the sponsor to read
+    client.lastprice(&sponsor, &asset);
 }
 
 //seed prices and a funded subscriber with access to the first asset until the given timestamp
