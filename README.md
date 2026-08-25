@@ -27,8 +27,8 @@ stored in the oracle contract and becomes immutable once it is written to the co
 Reflector offers two data access models for Stellar on-chain oracles:
 
 - **ReflectorPulse** oracles with a uniform 5-minute update interval provide free access to published price feeds
-- **ReflectorBeam** oracles allow flexible oracle provisioning and feature faster price updates in return for a small
-  XRF invocation fee
+- **ReflectorBeam** oracles allow flexible oracle provisioning and feature faster price updates for subscribers with
+  prepaid timed per-asset access purchased with XRF
 
 Both contract implementations are compatible with the
 [SEP-40](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0040.md) ecosystem standard.
@@ -79,7 +79,7 @@ Follow this example to invoke oracles functions from your contract code.
 ```rust
 /* contract.rs */
 use crate::reflector::{ReflectorPulseClient, Asset as ReflectorAsset}; // Import Reflector interface
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
 
 #[contract]
 pub struct MyAwesomeContract; // Of course, it's awesome, we know it!
@@ -183,37 +183,81 @@ pub enum Error {
     Unauthorized = 1,
     AssetMissing = 2,
     AssetAlreadyExists = 3,
-    InvalidConfigVersion = 4,
+    InvalidConfig = 4,
     InvalidTimestamp = 5,
-    InvalidUpdateLength = 6,
-    AssetLimitExceeded = 7,
+    AssetLimitExceeded = 6,
+    InvalidAmount = 7,
     InvalidPricesUpdate = 8
 }
 ```
 ### ReflectorBeam contract
+
+Beam oracles use a prepaid access model. Before reading prices, an account (or a sponsor
+acting on its behalf) purchases timed access to the assets it needs with a single call:
+
+- `track(sponsor, account, assets, amount)` — burns `amount` XRF from `sponsor`, splits it
+  evenly between the listed assets, and converts each share to access time for `account` at
+  the daily rate: `time = (amount ÷ assets_count) × 1 day ÷ daily_fee`, floored at each
+  division step. The purchased time is added on top of the remaining access (or counted
+  from now when the access has lapsed), and the new access expiration timestamps are
+  returned, one per asset.
+- `tracked_until(account, asset)` — current access expiration unix timestamp (in seconds),
+  0 if none was ever tracked.
+- Read prices with `price()`, `lastprice()`, `prices()` while the access is active.
+
+Note: contract storage entries have a maximum rent horizon (~6 months of ledgers). For access
+periods purchased far beyond it, the account's access entry may be archived before the access
+expires — any subsequent `track()` (or a standard entry restore) makes it live again; no
+access is lost.
 
 Follow this example to invoke oracle functions from your contract code.
 
 ```rust
 /* contract.rs */
 use crate::reflector::{ReflectorBeamClient, Asset as ReflectorAsset}; // Import Reflector Beam interface
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, symbol_short, auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation}};
+use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, IntoVal, Symbol, Vec};
 
 #[contract]
 pub struct MyAwesomeContract; // Of course, it's awesome, we know it!
 
 #[contractimpl]
 impl MyAwesomeContract {
+    // Prepay oracle access for this contract - call it once before reading prices,
+    // then again whenever the subscription needs to be extended
+    pub fn prepay_access(e: Env) {
+        // Oracle contract address to use
+        let oracle_address = Address::from_str(&e, "CAFJZQWSED6YAWZU3GWRTOCNPPCGBN32L7QV43XX5LZLFTK6JLN34DLN");
+        // Create client for working with oracle
+        let reflector_client = ReflectorBeamClient::new(&e, &oracle_address);
+        // The assets we want to read
+        let assets = Vec::from_array(&e, [ReflectorAsset::Other(Symbol::new(&e, &("BTC")))]);
+        // How much XRF to spend; the purchased access time is proportional:
+        // time = amount * 1 day / (assets_count * daily_fee)
+        let amount = 10_0000000i128;
+        // Authorize the XRF burn executed inside track()
+        authorize_track(&e, amount);
+        // Purchase the access for this contract
+        // (any address can sponsor the access for this contract instead)
+        let ttls = reflector_client.track(
+            &e.current_contract_address(),
+            &e.current_contract_address(),
+            &assets,
+            &amount,
+        );
+        // ttls now holds the new access expiration for every asset (unix timestamp, seconds)
+    }
+
     pub fn lets_rock(e: Env) {
         // Oracle contract address to use
         let oracle_address = Address::from_str(&e, "CAFJZQWSED6YAWZU3GWRTOCNPPCGBN32L7QV43XX5LZLFTK6JLN34DLN");
         // Create client for working with oracle
         let reflector_client = ReflectorBeamClient::new(&e, &oracle_address);
-        // Authorize XRF fee charge for lastprice() invocation
-        authorize_spend(&e, &reflector_client, 1);
         // Ticker to lookup the price
         let ticker = ReflectorAsset::Other(Symbol::new(&e, &("BTC")));
-        // Fetch the most recent price record for it
+        // Fetch the most recent price record
+        // (this contract's access to the BTC feed must have been prepaid beforehand
+        // via track() - see prepay_access() above)
         let recent = reflector_client.lastprice(&e.current_contract_address(), &ticker);
         // Check the result
         if recent.is_none() {
@@ -238,22 +282,20 @@ impl MyAwesomeContract {
     }
 }
 
-// Authorization is required to spend XRF tokens that cover invocation cost
-fn authorize_spend(e: &Env, reflector_client: &ReflectorBeamClient, periods: u32) {
-    // How much will it cost
-    let cost = reflector_client.estimate_cost(&periods);
+// Authorization is required to burn the XRF tokens that pay for the access
+fn authorize_track(e: &Env, amount: i128) {
     // XRF token address on Mainnet
     let xrf = Address::from_str(&e, "CBLLEW7HD2RWATVSMLAGWM4G3WCHSHDJ25ALP4DI6LULV5TU35N2CIZA");
-    // Build authorization request
+    // Build authorization request for the burn sub-invocation
     let invocation = InvokerContractAuthEntry::Contract(SubContractInvocation {
         context: ContractContext {
-            contract: xrf, // Contract address
-            fn_name: symbol_short!("burn"), // XRF tokens get burned after usage
+            contract: xrf, // Token contract address
+            fn_name: symbol_short!("burn"), // XRF tokens get burned
             args: Vec::from_array(
                 e,
                 [
                     e.current_contract_address().to_val(), // Current contract authorizes spend
-                    cost.into_val(&e), // Reflector invocation cost
+                    amount.into_val(e), // Payment amount
                 ],
             ),
         },
@@ -298,12 +340,14 @@ pub trait Contract {
     fn version() -> u32;
     // Contract admin address
     fn admin() -> Option<Address>;
-    // Extend asset TTL (time-to-live) in the contract storage
-    fn extend_asset_ttl(sponsor: Address, asset: Asset);
     // Get asset expiration timestamp
     fn expires(asset: Asset) -> Option<u64>;
-    // Estimate invocation cost based on periods
-    fn estimate_cost(periods: u32) -> i128;
+    // Purchase timed access to the assets for the account; the amount is burned from
+    // the sponsor and split evenly between the assets. Returns new access expiration
+    // unix timestamps (in seconds), one per requested asset
+    fn track(sponsor: Address, account: Address, assets: Vec<Asset>, amount: i128) -> Vec<u64>;
+    // Get access expiration unix timestamp (in seconds) for the account and asset, 0 if none
+    fn tracked_until(account: Address, asset: Asset) -> u64;
 }
 
 // Quoted asset definition
@@ -330,11 +374,127 @@ pub enum Error {
     Unauthorized = 1,
     AssetMissing = 2,
     AssetAlreadyExists = 3,
-    InvalidConfigVersion = 4,
+    InvalidConfig = 4,
     InvalidTimestamp = 5,
-    InvalidUpdateLength = 6,
-    AssetLimitExceeded = 7,
-    InvalidPricesUpdate = 8
+    AssetLimitExceeded = 6,
+    InvalidAmount = 7,
+    InvalidPricesUpdate = 8,
+    AccessDenied = 102,
+    InvalidRequest = 103
+}
+```
+
+#### Sharing tracked access across multiple contracts
+
+A single tracked-access account can serve a whole fleet of consumer contracts through a
+proxy. The proxy contract is the account the oracle sees (the `caller` in read calls),
+keeps an admin-managed set of authorized addresses, and forwards oracle invocations on
+their behalf. The oracle address travels with every invocation, so one proxy can serve
+multiple Beam oracles at once — e.g. a protocol operating many pools can authorize each
+pool once and let it read whatever feeds the proxy's access covers.
+
+How it fits together:
+
+1. Deploy the proxy and `authorize()` your consumer contracts (admin only).
+2. Grant access by calling `track()` **directly on the oracle** with `account` set to the
+   proxy address — any sponsor can pay, no proxy involvement required.
+3. Consumers call `invoke()` with a batch of `(oracle, function, args)` tuples. In every
+   forwarded call the oracle's `caller` argument must be the **proxy address** — the proxy
+   is the oracle's direct invoker (so its authorization is implicit), and the oracle checks
+   the proxy's asset access.
+
+Security note: `invoke()` is a generic passthrough executed with the proxy's identity —
+authorized addresses can invoke any contract in the proxy's name. Authorize only trusted
+contracts and accounts, and don't attach anything but the oracle access to the proxy's
+identity (in particular, don't let it hold tokens).
+
+```rust
+/* proxy.rs */
+use soroban_sdk::{contract, contracterror, contractimpl, Address, Env, Symbol, Val, Vec};
+
+const ADMIN_KEY: &str = "admin";
+
+#[contracterror]
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum ProxyError {
+    NotAuthorized = 1
+}
+
+#[contract]
+pub struct OracleProxyContract;
+
+#[contractimpl]
+impl OracleProxyContract {
+    // Initialize the proxy with its admin address
+    pub fn __constructor(e: Env, admin: Address) {
+        e.storage().instance().set(&ADMIN_KEY, &admin);
+    }
+
+    // Grant an address the right to invoke oracles through this proxy (admin only)
+    pub fn authorize(e: Env, address: Address) {
+        let admin: Address = e.storage().instance().get(&ADMIN_KEY).unwrap();
+        admin.require_auth();
+        e.storage().persistent().set(&address, &true);
+    }
+
+    // Revoke previously granted access (admin only)
+    pub fn deny(e: Env, address: Address) {
+        let admin: Address = e.storage().instance().get(&ADMIN_KEY).unwrap();
+        admin.require_auth();
+        e.storage().persistent().remove(&address);
+    }
+
+    // Forward a batch of invocations to oracle contracts on behalf of the proxy.
+    // Each invocation is a (oracle address, function name, arguments) tuple
+    pub fn invoke(e: Env, caller: Address, invocations: Vec<(Address, Symbol, Vec<Val>)>) -> Vec<Val> {
+        caller.require_auth();
+        // Only authorized addresses can act on behalf of the proxy
+        if !e.storage().persistent().has(&caller) {
+            e.panic_with_error(ProxyError::NotAuthorized);
+        }
+        let mut results = Vec::new(&e);
+        for (oracle, function, args) in invocations.iter() {
+            results.push_back(e.invoke_contract::<Val>(&oracle, &function, args));
+        }
+        results
+    }
+}
+```
+
+And a consumer contract using it (relies on the same `reflector_beam.rs` interface file
+for the `Asset`/`PriceData` types):
+
+```rust
+/* pool.rs */
+use crate::reflector::{Asset as ReflectorAsset, PriceData};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, IntoVal, Symbol, TryIntoVal, Val, Vec};
+
+// Proxy contract interface exported as OracleProxyClient
+#[soroban_sdk::contractclient(name = "OracleProxyClient")]
+pub trait Proxy {
+    fn invoke(caller: Address, invocations: Vec<(Address, Symbol, Vec<Val>)>) -> Vec<Val>;
+}
+
+#[contract]
+pub struct PoolContract;
+
+#[contractimpl]
+impl PoolContract {
+    // Read the most recent BTC price through the proxy
+    // (the proxy's access to the feed is granted by calling track() directly
+    // on the oracle with account = proxy address - any sponsor can pay)
+    pub fn read_price(e: Env, proxy: Address, oracle: Address) -> Option<PriceData> {
+        let proxy_client = OracleProxyClient::new(&e, &proxy);
+        let ticker = ReflectorAsset::Other(Symbol::new(&e, &("BTC")));
+        let lastprice = (
+            oracle,
+            symbol_short!("lastprice"),
+            Vec::from_array(&e, [proxy.to_val(), ticker.into_val(&e)]),
+        );
+        let results = proxy_client.invoke(&e.current_contract_address(), &Vec::from_array(&e, [lastprice]));
+        // Decode the raw result back into the typed price record
+        results.get_unchecked(0).try_into_val(&e).unwrap()
+    }
 }
 ```
 

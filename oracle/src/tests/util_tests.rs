@@ -4,7 +4,10 @@ extern crate std;
 use soroban_sdk::{log, testutils::Address as _, Address, Bytes, Env, Vec};
 use test_case::test_case;
 
-use crate::{mapping, prices, settings, testutils::generate_update_record_mask};
+use crate::{
+    assets, mapping, prices, settings,
+    testutils::{generate_assets, generate_update_record_mask},
+};
 
 #[test_case(1, 0, 14)]
 #[test_case(0, 1, 14)]
@@ -101,5 +104,31 @@ fn normalize_timestamp_test(input: u64, expected: u64) {
         settings::set_resolution(&e, 300_000);
         let normalized = crate::timestamps::normalize(&e, input);
         assert_eq!(normalized, expected);
+    });
+}
+
+#[test]
+fn ensure_expiration_test() {
+    let e = Env::default();
+    //register contract to have storage available
+    let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
+    e.as_contract(&contract.address(), || {
+        //add two assets with zero initial expiration
+        let test_assets = generate_assets(&e, 2, 0);
+        assets::add_assets(&e, test_assets.clone(), 0);
+        //bump expiration for the first asset
+        assets::ensure_expiration(&e, 0, 5_000);
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(0)),
+            Some(5_000)
+        );
+        //smaller value must not decrease expiration
+        assets::ensure_expiration(&e, 0, 1_000);
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(0)),
+            Some(5_000)
+        );
+        //second asset untouched
+        assert_eq!(assets::expires(&e, test_assets.get_unchecked(1)), Some(0));
     });
 }

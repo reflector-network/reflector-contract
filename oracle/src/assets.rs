@@ -129,6 +129,16 @@ pub fn extend_ttl(
     asset_expiration
 }
 
+// Ensure the asset feed expiration covers the given timestamp (no fee charged)
+pub fn ensure_expiration(e: &Env, asset_index: u32, until: u64) {
+    let mut expiration = load_expiration_records(e);
+    if expiration.get(asset_index).unwrap_or(0) >= until {
+        return; //already covered
+    }
+    expiration.set(asset_index, until);
+    set_expirations_records(e, &expiration);
+}
+
 // Estimate amount of fee tokens required to bump the retention for a given time (in milliseconds)
 pub fn estimate_retention_cost(e: &Env, bump: u64) -> (Address, i128) {
     //load daily retention cost from config

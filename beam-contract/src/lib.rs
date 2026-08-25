@@ -1,10 +1,8 @@
 #![no_std]
-mod cost;
+mod access;
 
-use cost::{charge_invocation_fee, load_costs_config, set_costs_config};
 use oracle::price_oracle::PriceOracleContractBase;
 use oracle::types::{Asset, ConfigData, FeeConfig, PriceData, PriceUpdate};
-use oracle::{auth, settings};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 #[contract]
@@ -80,8 +78,13 @@ impl BeamOracleContract {
     // # Returns
     //
     // Contract version
-    pub fn version(e: &Env) -> u32 {
-        PriceOracleContractBase::version(e)
+    pub fn version(_e: &Env) -> u32 {
+        env!("CARGO_PKG_VERSION")
+            .split(".")
+            .next()
+            .unwrap()
+            .parse::<u32>()
+            .unwrap()
     }
 
     // Return expiration date for a given asset
@@ -101,40 +104,47 @@ impl BeamOracleContract {
         PriceOracleContractBase::expires(e, asset)
     }
 
-    // Estimates amount of fee tokens required to extend the asset retention config for a given time
+    // Purchase timed access to the given assets for the account.
+    // The amount of fee tokens is burned from the sponsor, split evenly between
+    // the assets, and converted to access time at the daily rate. The feed
+    // expiration is extended to cover the purchased access
     //
     // # Arguments
     //
-    // * `period` - Desired retention period extension (in seconds)
+    // * `sponsor` - Address that pays for the access
+    // * `account` - Account that receives the access
+    // * `assets` - Assets to track (must be supported, no duplicates)
+    // * `amount` - Amount of fee tokens to burn
     //
     // # Returns
     //
-    // Fee asset and estimated amount required for the fee bump
+    // New access expiration timestamps (in seconds), one per requested asset
     //
     // # Panics
     //
-    // Panics if the asset is not supported or if retention config is malformed/missing
-    pub fn estimate_retention_cost(e: &Env, period: u64) -> (Address, i128) {
-        PriceOracleContractBase::estimate_retention_cost(e, period)
+    // Panics if the request or amount is invalid, or fee config is missing
+    pub fn track(
+        e: &Env,
+        sponsor: Address,
+        account: Address,
+        assets: Vec<Asset>,
+        amount: i128,
+    ) -> Vec<u64> {
+        access::track(e, sponsor, account, assets, amount)
     }
 
-    // Extends asset expiration date by a given amount of tokens.
+    // Return access expiration timestamp for the account and asset
     //
     // # Arguments
     //
-    // * `sponsor` - Address that sponsors price feed
-    // * `asset` - Quoted asset
-    // * `amount` - Amount of tokens to burn for extending the expiration date
+    // * `account` - Account to check
+    // * `asset` - Asset to check
     //
     // # Returns
     //
-    // Current asset expiration timestamp (in seconds)
-    //
-    // # Panics
-    //
-    // Panics if asset is not supported or if retention config is malformed/missing
-    pub fn extend_asset_ttl(e: &Env, sponsor: Address, asset: Asset, amount: i128) -> u64 {
-        PriceOracleContractBase::extend_asset_ttl(e, sponsor, asset, amount, 0)
+    // Access expiration unix timestamp (in seconds), 0 if no access was tracked
+    pub fn tracked_until(e: &Env, account: Address, asset: Asset) -> u64 {
+        access::access_until(e, account, asset)
     }
 
     // Return fee token address daily price feed retainer fee amount
@@ -144,29 +154,6 @@ impl BeamOracleContract {
     // Fee token address and daily price feed retainer fee amount
     pub fn fee_config(e: &Env) -> FeeConfig {
         PriceOracleContractBase::fee_config(e)
-    }
-
-    // Retrieve current invocation costs config
-    //
-    // # Returns
-    //
-    // Invocation costs. 0 index - records modifier, 1 index - price invocation cost
-    pub fn invocation_costs(e: &Env) -> Vec<u64> {
-        load_costs_config(e)
-    }
-
-    // Estimate invocation cost based on its complexity
-    //
-    // # Arguments
-    //
-    // * `periods` - Number of requested history periods
-    //
-    // # Returns
-    //
-    // Amount of fee tokens required to pay for invocation
-    pub fn estimate_cost(e: &Env, periods: u32) -> i128 {
-        let fee_config = settings::get_fee_config(e);
-        cost::estimate_invocation_cost(e, periods, fee_config)
     }
 
     // Return contract admin address
@@ -182,59 +169,62 @@ impl BeamOracleContract {
     //
     // # Arguments
     //
-    // * `caller` - Caller that covers invocation cost
+    // * `caller` - Caller with active access to the asset feed
     // * `asset` - Asset to quote
     // * `timestamp` - Timestamp in seconds
     //
     // # Returns
     //
     // Price record for given asset at given timestamp or None if not found
+    //
+    // # Panics
+    //
+    // Panics if the caller is not entitled to read the asset feed
     pub fn price(e: &Env, caller: Address, asset: Asset, timestamp: u64) -> Option<PriceData> {
         caller.require_auth();
-        let res = PriceOracleContractBase::price(e, asset, timestamp);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, 1);
-        }
-        res
+        access::check_access(e, &caller, &asset);
+        PriceOracleContractBase::price(e, asset, timestamp)
     }
 
     // Returns most recent price for an asset
     //
     // # Arguments
     //
-    // * `caller` - Caller that covers invocation cost
+    // * `caller` - Caller with active access to the asset feed
     // * `asset` - Asset to quote
     //
     // # Returns
     //
     // Most recent price for given asset or None if asset is not supported
+    //
+    // # Panics
+    //
+    // Panics if the caller is not entitled to read the asset feed
     pub fn lastprice(e: &Env, caller: Address, asset: Asset) -> Option<PriceData> {
         caller.require_auth();
-        let res = PriceOracleContractBase::lastprice(e, asset);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, 1);
-        }
-        res
+        access::check_access(e, &caller, &asset);
+        PriceOracleContractBase::lastprice(e, asset)
     }
 
     // Return last N price records for given asset
     //
     // # Arguments
     //
-    // * `caller` - Caller that covers invocation cost
+    // * `caller` - Caller with active access to the asset feed
     // * `asset` - Asset to quote
     // * `records` - Number of records to return
     //
     // # Returns
     //
     // Prices for given asset or None if asset is not supported
+    //
+    // # Panics
+    //
+    // Panics if the caller is not entitled to read the asset feed
     pub fn prices(e: &Env, caller: Address, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
         caller.require_auth();
-        let res = PriceOracleContractBase::prices(e, asset, records);
-        if res.is_some() {
-            charge_invocation_fee(e, &caller, records);
-        }
-        res
+        access::check_access(e, &caller, &asset);
+        PriceOracleContractBase::prices(e, asset, records)
     }
 
     /* Admin section */
@@ -306,21 +296,6 @@ impl BeamOracleContract {
     // Panics if not authorized or not initialized yet
     pub fn set_fee_config(e: &Env, config: FeeConfig) {
         PriceOracleContractBase::set_fee_config(e, config, 0);
-    }
-
-    // Update costs configuration per each invocation category
-    // Requires admin authorization
-    //
-    // # Arguments
-    //
-    // * `config` - Invocation costs for different invocation categories
-    //
-    // # Panics
-    //
-    // Panics if not authorized or not initialized yet
-    pub fn set_invocation_costs_config(e: &Env, config: Vec<u64>) {
-        auth::panic_if_not_admin(e);
-        set_costs_config(e, &config);
     }
 
     // Record new price feed history snapshot
