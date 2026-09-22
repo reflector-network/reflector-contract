@@ -58,7 +58,16 @@ fn store_prices_test(
     let contract_id = e.register_stellar_asset_contract_v2(Address::generate(&e));
     e.as_contract(&contract_id.address(), || {
         let timeframe: u64 = 300_000;
-        settings::set_resolution(&e, timeframe as u32);
+        //the base asset is required to validate the assets being added
+        settings::init(
+            &e,
+            &types::Asset::Other(Symbol::new(&e, "BASE_ASSET")),
+            14,
+            timeframe as u32,
+            0,
+            2,
+            &types::FeeConfig::None,
+        );
         protocol::set_protocol_version(&e, 2);
 
         assets::add_assets(&e, assets.clone(), 180);

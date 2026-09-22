@@ -1,6 +1,9 @@
 use crate::settings;
 use soroban_sdk::Env;
 
+// UNIX timestamp of 3000-01-01T00:00:00Z (in milliseconds) - used as the expiration marker for the entries that never expire
+pub const DISTANT_FUTURE: u64 = 32_503_680_000_000;
+
 // Normalize timestamp trimming it to the timeframe resolution defined in settings
 pub fn normalize(e: &Env, value: u64) -> u64 {
     let timeframe = settings::get_resolution(e) as u64;

@@ -8,6 +8,8 @@ const DAY: i128 = 86_400_000;
 const LEDGER_TIME: u64 = 5000;
 //minimum rent extension for touched entries (~30 days of ledgers)
 const MIN_EXTENSION: u32 = 518_400;
+//placeholder index for base asset
+const SKIP_INDEX: u32 = u32::MAX;
 
 #[contracterror]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -58,14 +60,19 @@ pub fn track(
         u64::try_from(duration).unwrap_or_else(|_| e.panic_with_error(Error::InvalidAmount));
     //resolve and validate all requested assets before any side effects
     let all_assets = assets::load_all_assets(e);
+    let base = settings::get_base_asset(e);
     let mut indexes: Vec<u32> = Vec::new(e);
     let mut seen: Map<u32, bool> = Map::new(e);
     for asset in track_assets.iter() {
-        //ensure the asset is supported
-        let index = match all_assets.first_index_of(&asset) {
-            Some(index) => index,
-            None => {
-                e.panic_with_error(AccessError::InvalidRequest);
+        let index = if asset == base {
+            SKIP_INDEX //the base asset is charged for like any other, but requires no tracking
+        } else {
+            //ensure the asset is supported
+            match all_assets.first_index_of(&asset) {
+                Some(index) => index,
+                None => {
+                    e.panic_with_error(AccessError::InvalidRequest);
+                }
             }
         };
         //reject duplicates
@@ -85,6 +92,11 @@ pub fn track(
     let mut expirations = Vec::new(e); //feed expirations to bump, applied in one batch
     let mut horizon = 0u64;
     for (index, asset) in indexes.iter().zip(track_assets.iter()) {
+        //the base asset needs no access records - its access never expires
+        if index == SKIP_INDEX {
+            result.push_back(timestamps::DISTANT_FUTURE / 1000);
+            continue;
+        }
         //extend from the remaining time if the access is still active
         let current = access.get(index).unwrap_or(0);
         let new_ttl = current.max(now) + duration;
@@ -98,8 +110,11 @@ pub fn track(
         }
     }
     assets::ensure_expirations(e, &expirations);
-    save_access(e, &consumer, &access);
-    extend_entry_ttl(e, &consumer, horizon);
+    //skip the storage write if nothing but the base asset has been requested
+    if !expirations.is_empty() {
+        save_access(e, &consumer, &access);
+        extend_entry_ttl(e, &consumer, horizon);
+    }
     e.events().publish_event(&TrackEvent {
         consumer,
         sponsor,
@@ -114,8 +129,14 @@ pub fn access_until(e: &Env, address: Address, check_assets: Vec<Asset>) -> Vec<
     let access = load_access(e, &address).unwrap_or(Map::new(e));
     //load the asset list once and resolve every requested asset against it
     let all_assets = assets::load_all_assets(e);
+    let base = settings::get_base_asset(e);
     let mut res = Vec::new(e);
     for asset in check_assets.iter() {
+        //the base asset requires no tracking and is always accessible
+        if asset == base {
+            res.push_back(timestamps::DISTANT_FUTURE / 1000);
+            continue;
+        }
         match all_assets.first_index_of(&asset) {
             Some(index) => res.push_back(access.get(index).unwrap_or(0) / 1000),
             None => res.push_back(0u64),
@@ -126,6 +147,10 @@ pub fn access_until(e: &Env, address: Address, check_assets: Vec<Asset>) -> Vec<
 
 // Verify that the consumer is entitled to read prices for the asset
 pub fn check_access(e: &Env, consumer: &Address, asset: &Asset) {
+    //the base asset requires no tracking and is accessible to everyone
+    if settings::get_base_asset(e) == *asset {
+        return;
+    }
     //unknown assets are denied outright
     if let Some(index) = assets::resolve_asset_index(e, asset) {
         let now = timestamps::ledger_timestamp(e);

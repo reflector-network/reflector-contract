@@ -11,6 +11,8 @@ use soroban_sdk::{Address, Event, Map, Vec};
 
 //daily per-asset access rate used across tests
 const FEE: i128 = 1_000_000;
+//3000-01-01T00:00:00Z - expiration reported for the base asset (in seconds)
+const DISTANT_FUTURE: u64 = oracle::timestamps::DISTANT_FUTURE / 1000;
 
 #[test]
 fn track_test() {
@@ -651,4 +653,152 @@ fn read_unsupported_asset_test() {
     seed_subscriber(&env, &client, &init_data, &fee_token, &account, 30);
 
     client.lastprice(&account, &Asset::Stellar(Address::generate(&env)));
+}
+
+#[test]
+fn base_asset_access_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+
+    let account = Address::generate(&env);
+    let asset0 = init_data.assets.get_unchecked(0);
+    //the base asset requires no tracking - reported access never expires, results are positional
+    assert_eq!(
+        client.tracked_until(
+            &account,
+            &Vec::from_array(&env, [init_data.base_asset.clone(), asset0.clone()])
+        ),
+        Vec::from_array(&env, [DISTANT_FUTURE, 0])
+    );
+    //the same applies to the base asset feed expiration
+    assert_eq!(client.expires(&init_data.base_asset), Some(DISTANT_FUTURE));
+}
+
+#[test]
+fn base_asset_price_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+
+    //record a price round for the quoted assets
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &600_000);
+
+    let base = init_data.base_asset.clone();
+    let caller = Address::generate(&env);
+    //the base asset is quoted as 1 for any caller that tracked no access, at any timestamp
+    for timestamp in [0u64, 600, 900] {
+        let price = client.price(&caller, &base, &timestamp).unwrap();
+        assert_eq!(price.price, normalize_price(1));
+        //the record carries the most recent price update timestamp
+        assert_eq!(price.timestamp, 600);
+    }
+    //lastprice reports the same record, also without any tracked access
+    let last = client.lastprice(&caller, &base).unwrap();
+    assert_eq!(last.price, normalize_price(1));
+    assert_eq!(last.timestamp, 600);
+    //the history is generated on the fly, stepping back by the resolution (300 seconds)
+    let records = client.prices(&caller, &base, &2).unwrap();
+    assert_eq!(records.len(), 3);
+    for (i, record) in records.iter().enumerate() {
+        assert_eq!(record.price, normalize_price(1));
+        assert_eq!(record.timestamp, 600 - 300 * i as u64);
+    }
+}
+
+#[test]
+fn track_base_asset_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let sponsor = Address::generate(&env);
+    let account = Address::generate(&env);
+    fee_token.mint(&sponsor, &100_000_000);
+
+    let base = init_data.base_asset.clone();
+    let asset0 = init_data.assets.get_unchecked(0);
+    let day = 24 * 60 * 60u64;
+
+    //the base asset is accepted instead of being rejected as unsupported, and takes its
+    //share of the amount: 60M split evenly is 30M per asset, so 30 days for the tracked one
+    let ttls = client.track(
+        &sponsor,
+        &account,
+        &Vec::from_array(&env, [base.clone(), asset0.clone()]),
+        &60_000_000,
+    );
+    let expected = 900 + 30 * day;
+    assert_eq!(ttls, Vec::from_array(&env, [DISTANT_FUTURE, expected]));
+
+    //the base asset is silently skipped - it gets no entry in the event
+    let expected_event = TrackEvent {
+        consumer: account.clone(),
+        sponsor: sponsor.clone(),
+        amount: 60_000_000,
+        assets: {
+            let mut tracked = Map::new(&env);
+            tracked.set(asset0.clone(), expected);
+            tracked
+        },
+    };
+    assert_eq!(
+        env.events().all().events().last().unwrap(),
+        &expected_event.to_xdr(&env, &client.address)
+    );
+    //the full amount is burned, the base asset share included
+    assert_eq!(fee_token.balance(&sponsor), 40_000_000);
+    //no access record is created for the base asset - only the tracked asset is stored
+    assert_eq!(access_entry_size(&env, &client, &account), 1);
+    assert_eq!(
+        client.tracked_until(&account, &Vec::from_array(&env, [base, asset0])),
+        Vec::from_array(&env, [DISTANT_FUTURE, expected])
+    );
+}
+
+#[test]
+fn track_base_asset_only_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &10_000_000);
+
+    let base = init_data.base_asset.clone();
+    //a request for the base asset alone is charged in full and tracks nothing
+    let ttls = client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [base.clone()]),
+        &10_000_000,
+    );
+    assert_eq!(ttls, Vec::from_array(&env, [DISTANT_FUTURE]));
+    assert_eq!(fee_token.balance(&account), 0);
+    //no access entry is written for the consumer
+    assert!(!env.as_contract(&client.address, || env
+        .storage()
+        .persistent()
+        .has::<Address>(&account)));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #103)")]
+fn track_duplicate_base_asset_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &10_000_000);
+    let base = init_data.base_asset.clone();
+    //duplicates are rejected for the base asset just like for any other
+    client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [base.clone(), base]),
+        &10_000_000,
+    );
 }

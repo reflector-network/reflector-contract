@@ -6,13 +6,16 @@ use oracle::testutils::{
     set_ledger_timestamp,
 };
 use oracle::types::{FeeConfig, PriceData};
-use soroban_sdk::{testutils::Address as _, Address};
+use soroban_sdk::{testutils::Address as _, Address, Vec};
 use test_case::test_case;
 
 extern crate std;
 use std::{collections::VecDeque, println};
 
 use crate::{PulseOracleContract, PulseOracleContractClient};
+
+//3000-01-01T00:00:00Z - expiration reported for the base asset (in seconds)
+const DISTANT_FUTURE: u64 = oracle::timestamps::DISTANT_FUTURE / 1000;
 
 #[test]
 fn version_test() {
@@ -209,4 +212,111 @@ fn extend_asset_ttl_test() {
 
     //verify new expiration
     assert_eq!(ttl, initial_expiration + 864000);
+}
+
+#[test]
+fn base_asset_expiration_test() {
+    let (_, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    //the base asset is not a part of the quoted assets list, but it never expires
+    assert_eq!(client.expires(&init_data.base_asset), Some(DISTANT_FUTURE));
+}
+
+#[test]
+fn base_asset_price_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let base = init_data.base_asset.clone();
+    //the base asset is quoted as 1 even before the first price update
+    let price = client.price(&base, &0).unwrap();
+    assert_eq!(price.price, normalize_price(1));
+    assert_eq!(price.timestamp, 0);
+
+    //record a price round for the quoted assets
+    let timestamp = 600_000;
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &timestamp);
+
+    //the base asset is worth exactly 1 at any requested timestamp, and the record always
+    //carries the most recent price update timestamp
+    for requested in [0u64, 300, 600, 900] {
+        let price = client.price(&base, &requested).unwrap();
+        assert_eq!(price.price, normalize_price(1));
+        assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+    }
+    assert_eq!(client.last_timestamp(), convert_to_seconds(timestamp));
+}
+
+#[test]
+fn base_asset_lastprice_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let base = init_data.base_asset.clone();
+    //the base asset is quoted as 1 even before the first price update
+    let price = client.lastprice(&base).unwrap();
+    assert_eq!(price.price, normalize_price(1));
+    assert_eq!(price.timestamp, 0);
+
+    //record a price round for the quoted assets
+    let timestamp = 600_000;
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &timestamp);
+
+    let price = client.lastprice(&base).unwrap();
+    assert_eq!(price.price, normalize_price(1));
+    assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+
+    //unlike the quoted assets, the base asset is still quoted once the feed goes stale
+    set_ledger_timestamp(&env, 100_000);
+    assert!(client
+        .lastprice(&init_data.assets.first_unchecked())
+        .is_none());
+    let price = client.lastprice(&base).unwrap();
+    assert_eq!(price.price, normalize_price(1));
+    assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+}
+
+#[test]
+fn base_asset_prices_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let base = init_data.base_asset.clone();
+    let asset = init_data.assets.first_unchecked();
+    //no history is reported before the first price update
+    assert!(client.prices(&base, &1).is_none());
+
+    //record two price rounds for the quoted assets
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &300_000);
+    client.set_price(&updates.0, &600_000);
+
+    //records step back from the last update by the resolution (300 seconds)
+    let records = client.prices(&base, &2).unwrap();
+    assert_eq!(records.len(), 3);
+    for (i, record) in records.iter().enumerate() {
+        assert_eq!(record.price, normalize_price(1));
+        assert_eq!(record.timestamp, 600 - 300 * i as u64);
+    }
+    //the requested window matches the one reported for a quoted asset with a dense feed
+    assert_eq!(
+        client.prices(&base, &1).unwrap().len(),
+        client.prices(&asset, &1).unwrap().len()
+    );
+    //the records limit is shared with the quoted assets
+    assert!(client.prices(&base, &21).is_none());
+    assert!(client.prices(&base, &20).is_some());
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn add_base_asset_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    //the base asset is quoted implicitly and cannot be added to the feed list
+    client.add_assets(&Vec::from_array(&env, [init_data.base_asset.clone()]));
 }

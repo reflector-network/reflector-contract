@@ -158,6 +158,45 @@ impl PriceOracleContractBase {
         auth::get_admin(e)
     }
 
+    // Price of the base asset quoted in itself - always exactly 1, scaled to the oracle decimals
+    fn base_asset_price(e: &Env) -> i128 {
+        10i128.pow(settings::get_decimals(e))
+    }
+
+    // Build the most recent price record for the base asset
+    fn base_asset_price_data(e: &Env) -> PriceData {
+        PriceData {
+            price: Self::base_asset_price(e),
+            timestamp: prices::get_last_timestamp(e) / 1000, //convert to seconds
+        }
+    }
+
+    // Build price history records for the base asset, stepping back by the resolution
+    // from the most recent price update
+    fn base_asset_prices(e: &Env, records: u32) -> Option<Vec<PriceData>> {
+        if records > prices::PRICE_RECORDS_LIMIT {
+            return None;
+        }
+        let mut timestamp = prices::get_last_timestamp(e);
+        if timestamp == 0 {
+            return None; //no price updates recorded yet
+        }
+        let price = Self::base_asset_price(e);
+        let resolution = settings::get_resolution(e) as u64;
+        let mut res = Vec::new(e);
+        for _ in 0..=records {
+            res.push_back(PriceData {
+                price,
+                timestamp: timestamp / 1000, //convert to seconds
+            });
+            if timestamp < resolution {
+                break;
+            }
+            timestamp -= resolution;
+        }
+        Some(res)
+    }
+
     // Returns price  for an asset at specific timestamp
     //
     // # Arguments
@@ -167,8 +206,12 @@ impl PriceOracleContractBase {
     //
     // # Returns
     //
-    // Price record for given asset at given timestamp or None if not found
+    // Price record for given asset at given timestamp or None if not found.
+    // The base asset is always quoted as 1 with the most recent price update timestamp
     pub fn price(e: &Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
+        if settings::get_base_asset(e) == asset {
+            return Some(Self::base_asset_price_data(e));
+        }
         //normalize timestamp
         let ts = timestamps::normalize(e, timestamp * 1000);
         //resolve index for the asset
@@ -184,8 +227,12 @@ impl PriceOracleContractBase {
     //
     // # Returns
     //
-    // Most recent price for given asset or None if asset is not supported
+    // Most recent price for given asset or None if asset is not supported.
+    // The base asset is always quoted as 1 with the most recent price update timestamp
     pub fn lastprice(e: &Env, asset: Asset) -> Option<PriceData> {
+        if settings::get_base_asset(e) == asset {
+            return Some(Self::base_asset_price_data(e));
+        }
         //get the last timestamp
         let ts = prices::obtain_last_record_timestamp(&e);
         if ts == 0 {
@@ -206,8 +253,12 @@ impl PriceOracleContractBase {
     //
     // # Returns
     //
-    // Prices for given asset or None if asset is not supported
+    // Prices for given asset or None if asset is not supported.
+    // The base asset is always quoted as 1, its records generated on the fly
     pub fn prices(e: &Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
+        if settings::get_base_asset(e) == asset {
+            return Self::base_asset_prices(e, records);
+        }
         let asset_index = assets::resolve_asset_index(e, &asset)?; //get the asset index to avoid multiple calls
         prices::load_prices(&e, asset_index, records)
     }
@@ -270,12 +321,13 @@ impl PriceOracleContractBase {
     //
     // # Arguments
     //
-    // * `assets` - Assets to add
+    // * `assets` - Assets to add (the base asset cannot be added)
     // * `initial_expiration_period` - Initial expiration period for new assets (in days)
     //
     // # Panics
     //
-    // Panics if not authorized, any of the assets were added earlier, or assets limit exceeded
+    // Panics if not authorized, any of the assets were added earlier or is the base asset,
+    // or assets limit exceeded
     pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
         auth::panic_if_not_admin(e);
         assets::add_assets(&e, assets, initial_expiration_period);

@@ -36,10 +36,15 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
     //use default expiration period for new assets
     let expiration_timestamp = get_expiration_timestamp(e, initial_expiration_period);
     //load current state
+    let base = settings::get_base_asset(e);
     let mut asset_list = load_all_assets(e);
     let mut expiration = load_expiration_records(e);
     //for each new asset
     for asset in assets.iter() {
+        //the base asset is quoted implicitly and cannot be added as a price feed
+        if asset == base {
+            panic_with_error!(&e, Error::AssetAlreadyExists);
+        }
         //check if the asset has been already added
         if asset_list.first_index_of(&asset).is_some() {
             panic_with_error!(&e, Error::AssetAlreadyExists);
@@ -58,6 +63,10 @@ pub fn add_assets(e: &Env, assets: Vec<Asset>, initial_expiration_period: u32) {
 
 // Retrieve expiration timestamp for given asset
 pub fn expires(e: &Env, asset: Asset) -> Option<u64> {
+    //the base asset itself never expires
+    if settings::get_base_asset(e) == asset {
+        return Some(timestamps::DISTANT_FUTURE);
+    }
     let asset_index = resolve_asset_index(e, &asset);
     if asset_index.is_none() {
         e.panic_with_error(Error::AssetMissing);
