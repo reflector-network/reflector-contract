@@ -269,11 +269,13 @@ fn base_asset_lastprice_test() {
     assert_eq!(price.price, normalize_price(1));
     assert_eq!(price.timestamp, convert_to_seconds(timestamp));
 
-    //unlike the quoted assets, the base asset is still quoted once the feed goes stale
+    //contract always quotes last price, even stale
     set_ledger_timestamp(&env, 100_000);
-    assert!(client
+    let price = client
         .lastprice(&init_data.assets.first_unchecked())
-        .is_none());
+        .unwrap();
+    assert_eq!(price.price, normalize_price(100));
+    assert_eq!(price.timestamp, convert_to_seconds(timestamp));
     let price = client.lastprice(&base).unwrap();
     assert_eq!(price.price, normalize_price(1));
     assert_eq!(price.timestamp, convert_to_seconds(timestamp));

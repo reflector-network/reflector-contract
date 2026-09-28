@@ -106,3 +106,51 @@ fn store_prices_test(
 
     e.cost_estimate().budget().print();
 }
+
+#[test]
+fn price_beyond_history_window_test() {
+    let e = Env::default();
+    let timeframe: u64 = 300_000;
+    let first = 1_760_000_100_000 / timeframe * timeframe;
+    let last = first + timeframe * 300;
+    set_ledger_timestamp(&e, last / 1000);
+
+    let mut assets = Vec::new(&e);
+    assets.push_back(types::Asset::Other(Symbol::new(&e, "ASSET_0")));
+    assets.push_back(types::Asset::Other(Symbol::new(&e, "ASSET_1")));
+    //register asset contract just to have storage
+    let contract_id = e.register_stellar_asset_contract_v2(Address::generate(&e));
+    e.as_contract(&contract_id.address(), || {
+        settings::init(
+            &e,
+            &types::Asset::Other(Symbol::new(&e, "BASE_ASSET")),
+            14,
+            timeframe as u32,
+            0,
+            2,
+            &types::FeeConfig::None,
+        );
+        protocol::set_protocol_version(&e, 2);
+        assets::add_assets(&e, assets.clone(), 180);
+        //record a price for a single asset
+        fn set_price(e: &Env, timestamp: u64, asset_index: usize) {
+            let mut all = Vec::from_array(e, [0i128, 0]);
+            all.set(asset_index as u32, 100);
+            let update = types::PriceUpdate {
+                prices: Vec::from_array(e, [100i128]),
+                mask: generate_update_record_mask(e, &all),
+            };
+            prices::update_history_mask(e, &all, timestamp);
+            prices::store_prices(e, update, timestamp, all);
+        }
+
+        //ASSET_0 is last quoted 300 periods before the latest round
+        set_price(&e, first, 0);
+        set_price(&e, last, 1);
+
+        //an unbounded walk back through the history fails with a budget error instead of hanging
+        e.cost_estimate().budget().reset_default();
+        assert_eq!(prices::load_prices(&e, 0, 3), None);
+        assert_eq!(prices::load_prices(&e, 1, 3).unwrap().len(), 1);
+    });
+}
