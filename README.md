@@ -196,14 +196,14 @@ Beam oracles use a prepaid access model. Before reading prices, a consumer (or a
 acting on its behalf) purchases time-bound asset price feeds access it needs with a single call:
 
 - `track(sponsor, consumer, assets, amount)` — burns `amount` XRF from `sponsor`, splits it
-  evenly between the listed assets, and converts each share to access time for `account` at
+  evenly between the listed assets, and converts each share to access time for `consumer` at
   the daily rate: `time = (amount / assets_count) x 1 day / daily_fee`, floored at each
   division step. The purchased time is added on top of the remaining access (or counted
   from now when the access has lapsed), and the new access expiration timestamps are
   returned, one per asset.
 - Read prices with `price()`, `lastprice()`, `prices()` while the access is active.
-- `tracked_until(consumer, assets)` — current access expiration UNIX timestamp (in seconds),
-  0 if none was ever tracked.
+- `tracked_until(consumer, assets)` — current access expiration UNIX timestamps (in seconds),
+  one per asset, 0 for an asset never tracked for the consumer.
 
 Follow this example to invoke oracle functions from your contract code.
 
@@ -341,7 +341,7 @@ pub trait Contract {
     // Returns new access expiration UNIX timestamps (in seconds) for each requested asset
     fn track(sponsor: Address, consumer: Address, assets: Vec<Asset>, amount: i128) -> Vec<u64>;
     // Get access expiration UNIX timestamp (in seconds) for the given consumer and assets
-    fn tracked_until(consumer: Address, asset: Asset) -> u64;
+    fn tracked_until(consumer: Address, assets: Vec<Asset>) -> Vec<u64>;
 }
 
 // Quoted asset definition
