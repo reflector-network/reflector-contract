@@ -19,11 +19,9 @@ fn normalize_price_data(price: i128, timestamp: u64) -> PriceData {
 pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
     let last_timestamp = get_last_timestamp(e);
     let ledger_timestamp = timestamps::ledger_timestamp(&e);
-    let resolution = settings::get_resolution(e) as u64;
     if last_timestamp == 0 //no prices yet
-        || last_timestamp > ledger_timestamp //last timestamp is in the future
-        || ledger_timestamp - last_timestamp >= resolution * 2
-    //last timestamp is too far in the past, so we cannot return the last price
+        || last_timestamp > ledger_timestamp
+    //last timestamp is in the future
     {
         return 0;
     }
@@ -213,15 +211,19 @@ pub fn load_prices(e: &Env, asset_index: u32, records: u32) -> Option<Vec<PriceD
     let lower_boundary = timestamp - resolution * records as u64;
     //last timestamp included in the response
     let mut last_included = timestamp;
+    //periods walked back from the last record
+    let mut back = 0;
     //continue to iterate until the last record with ts<=lower_boundary found
+    //within the 256 periods tracked by the history bitmask
     //(required for further interpolation if the value at lower_boundary is not available)
-    while last_included > lower_boundary {
+    while last_included > lower_boundary && back < 256 {
         //TODO: Load `history_map` and `cache` once outside the loop
         //invoke price fetch callback for each record
         if let Some(price) = retrieve_asset_price_data(e, asset_index, timestamp) {
             prices.push_back(price);
             last_included = timestamp;
         }
+        back += 1;
         timestamp -= resolution; //walk back in time
         if timestamp < resolution {
             break; //reached 0 timestamp - never happens in real life

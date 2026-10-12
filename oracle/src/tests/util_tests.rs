@@ -4,7 +4,12 @@ extern crate std;
 use soroban_sdk::{log, testutils::Address as _, Address, Bytes, Env, Vec};
 use test_case::test_case;
 
-use crate::{mapping, prices, settings, testutils::generate_update_record_mask};
+use crate::{
+    assets, mapping, prices, settings,
+    testutils::{generate_assets, generate_update_record_mask, DECIMALS, RESOLUTION},
+    timestamps,
+    types::{Asset, FeeConfig},
+};
 
 #[test_case(1, 0, 14)]
 #[test_case(0, 1, 14)]
@@ -101,5 +106,70 @@ fn normalize_timestamp_test(input: u64, expected: u64) {
         settings::set_resolution(&e, 300_000);
         let normalized = crate::timestamps::normalize(&e, input);
         assert_eq!(normalized, expected);
+    });
+}
+
+#[test]
+fn ensure_expirations_test() {
+    let e = Env::default();
+    //register contract to have storage available
+    let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
+    e.as_contract(&contract.address(), || {
+        init_settings(&e);
+        //add three assets with zero initial expiration
+        let test_assets = generate_assets(&e, 3, 0);
+        assets::add_assets(&e, test_assets.clone(), 0);
+        //bump expiration for the first asset
+        assets::ensure_expirations(&e, &Vec::from_array(&e, [(0u32, 5_000u64)]));
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(0)),
+            Some(5_000)
+        );
+        //a batch applies every update independently, and a smaller value never
+        //decreases the expiration already recorded for the asset
+        assets::ensure_expirations(&e, &Vec::from_array(&e, [(0u32, 1_000u64), (1, 9_000)]));
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(0)),
+            Some(5_000)
+        );
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(1)),
+            Some(9_000)
+        );
+        //assets missing from the batch are untouched
+        assert_eq!(assets::expires(&e, test_assets.get_unchecked(2)), Some(0));
+        //an empty batch is a no-op
+        assets::ensure_expirations(&e, &Vec::new(&e));
+        assert_eq!(
+            assets::expires(&e, test_assets.get_unchecked(1)),
+            Some(9_000)
+        );
+    });
+}
+
+// Initialize contract settings with a random base asset, returns the base asset
+fn init_settings(e: &Env) -> Asset {
+    let base = Asset::Stellar(Address::generate(e));
+    settings::init(e, &base, DECIMALS, RESOLUTION, 0, 0, &FeeConfig::None);
+    base
+}
+
+#[test]
+fn base_asset_expiration_test() {
+    let e = Env::default();
+    //register contract to have storage available
+    let contract = e.register_stellar_asset_contract_v2(Address::generate(&e));
+    e.as_contract(&contract.address(), || {
+        let base = init_settings(&e);
+        //the base asset is not a part of the quoted assets list, but it never expires
+        assert_eq!(
+            assets::expires(&e, base.clone()),
+            Some(timestamps::DISTANT_FUTURE)
+        );
+        //adding quoted assets does not affect the base asset expiration
+        assets::add_assets(&e, generate_assets(&e, 2, 0), 10);
+        assert_eq!(assets::expires(&e, base), Some(timestamps::DISTANT_FUTURE));
+        //3000-01-01T00:00:00Z
+        assert_eq!(timestamps::DISTANT_FUTURE / 1000, 32_503_680_000);
     });
 }

@@ -78,8 +78,13 @@ impl PulseOracleContract {
     // # Returns
     //
     // Contract protocol version
-    pub fn version(e: &Env) -> u32 {
-        PriceOracleContractBase::version(e)
+    pub fn version(_e: &Env) -> u32 {
+        env!("CARGO_PKG_VERSION")
+            .split(".")
+            .next()
+            .unwrap()
+            .parse::<u32>()
+            .unwrap()
     }
 
     // Return expiration date for a given asset
