@@ -2,8 +2,8 @@
 
 use oracle::init_contract_with_admin;
 use oracle::testutils::{
-    convert_to_seconds, generate_random_updates, generate_updates, normalize_price, register_token,
-    set_ledger_timestamp,
+    convert_to_seconds, generate_random_updates, generate_single_asset_update, generate_updates,
+    normalize_price, register_token, set_ledger_timestamp,
 };
 use oracle::types::{FeeConfig, PriceData};
 use soroban_sdk::{testutils::Address as _, Address, Vec};
@@ -98,6 +98,89 @@ fn lastprice_test() {
         .unwrap();
     assert_eq!(price.price, normalize_price(100));
     assert_eq!(price.timestamp, convert_to_seconds(timestamp));
+}
+
+#[test]
+fn lastprice_partial_update_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let total = init_data.assets.len();
+    let asset_a = init_data.assets.get_unchecked(0);
+    let asset_b = init_data.assets.get_unchecked(1);
+    let asset_c = init_data.assets.get_unchecked(2);
+
+    //all assets quoted in the first round
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &600_000);
+
+    //only asset B quoted in the second round
+    set_ledger_timestamp(&env, 1_200);
+    let partial = generate_single_asset_update(&env, total, 1, normalize_price(200));
+    client.set_price(&partial, &900_000);
+    assert_eq!(client.last_timestamp(), 900);
+    assert_eq!(
+        client.lastprice(&asset_b),
+        Some(PriceData {
+            price: normalize_price(200),
+            timestamp: 900
+        })
+    );
+
+    //assets omitted from the latest round are quoted from their most recent record
+    let expected = Some(PriceData {
+        price: normalize_price(100),
+        timestamp: 600,
+    });
+    assert_eq!(client.lastprice(&asset_a), expected);
+    assert_eq!(client.lastprice(&asset_c), expected);
+    assert_eq!(client.price(&asset_a, &600), expected);
+
+    //only asset A quoted in the third round
+    set_ledger_timestamp(&env, 1_500);
+    let partial = generate_single_asset_update(&env, total, 0, normalize_price(300));
+    client.set_price(&partial, &1_200_000);
+    assert_eq!(
+        client.lastprice(&asset_a),
+        Some(PriceData {
+            price: normalize_price(300),
+            timestamp: 1_200
+        })
+    );
+    assert_eq!(
+        client.lastprice(&asset_b),
+        Some(PriceData {
+            price: normalize_price(200),
+            timestamp: 900
+        })
+    );
+    assert_eq!(client.lastprice(&asset_c), expected);
+}
+
+#[test_case(1, true; "previous round")]
+#[test_case(255, true; "oldest tracked round")]
+#[test_case(256, false; "beyond tracked history")]
+fn lastprice_history_window_test(gap: u64, retained: bool) {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let asset_a = init_data.assets.get_unchecked(0);
+
+    //all assets quoted in the first round
+    let updates = generate_updates(&env, &init_data.assets, normalize_price(100));
+    client.set_price(&updates.0, &600_000);
+
+    //only asset B quoted `gap` rounds later
+    let timestamp = 600_000 + gap * 300_000;
+    set_ledger_timestamp(&env, convert_to_seconds(timestamp));
+    let partial =
+        generate_single_asset_update(&env, init_data.assets.len(), 1, normalize_price(200));
+    client.set_price(&partial, &timestamp);
+
+    //asset A is quoted from its last record as long as the record is within the tracked history
+    let last = client.lastprice(&asset_a);
+    assert_eq!(last.is_some(), retained);
+    assert_eq!(last, client.price(&asset_a, &600));
 }
 
 #[test_case(255, "gap 255")]
@@ -212,6 +295,30 @@ fn extend_asset_ttl_test() {
 
     //verify new expiration
     assert_eq!(ttl, initial_expiration + 864000);
+}
+
+#[test_case(1_000_000, 10 * 86_400, 10_000_000; "whole days")]
+#[test_case(1, 2 * 86_400 - 1, 2; "partial day")]
+#[test_case(1_000_000, 1, 12; "single second")]
+fn estimate_retention_cost_test(fee: i128, period: u64, expected: i128) {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), fee)));
+
+    //the estimated amount is rounded up
+    let (token, amount) = client.estimate_retention_cost(&period);
+    assert_eq!(token, fee_token.address);
+    assert_eq!(amount, expected);
+
+    //paying the estimated amount extends the expiration by at least the requested period
+    let sponsor = Address::generate(&env);
+    fee_token.mint(&sponsor, &amount);
+    let asset = init_data.assets.first_unchecked();
+    let initial_expiration = client.expires(&asset).unwrap();
+    let ttl = client.extend_asset_ttl(&sponsor, &asset, &amount);
+    assert!(ttl >= initial_expiration + period);
 }
 
 #[test]

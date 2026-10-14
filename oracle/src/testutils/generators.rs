@@ -60,6 +60,21 @@ pub fn generate_updates(
     )
 }
 
+// Generate a partial update quoting only a single asset out of the total
+pub fn generate_single_asset_update(
+    env: &Env,
+    total_assets: u32,
+    asset_index: u32,
+    price: i128,
+) -> PriceUpdate {
+    let mut updates = VecDeque::from(std::vec![0i128; total_assets as usize]);
+    updates[asset_index as usize] = price;
+    PriceUpdate {
+        prices: Vec::from_array(env, [price]),
+        mask: generate_update_record_mask(env, &updates),
+    }
+}
+
 fn get_random_bool() -> bool {
     //TODO: rewrite to use deterministic algo
     let nanos = std::time::SystemTime::now()

@@ -6,7 +6,7 @@ use crate::{BeamOracleContract, BeamOracleContractClient};
 use oracle::init_contract_with_admin;
 use oracle::testutils::{generate_updates, normalize_price, register_token, set_ledger_timestamp};
 use oracle::types::{Asset, FeeConfig};
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::{storage::Persistent as _, Address as _, Events, Ledger};
 use soroban_sdk::{Address, Event, Map, Vec};
 
 //daily per-asset access rate used across tests
@@ -107,8 +107,8 @@ fn track_dust_remainder_test() {
     let asset1 = init_data.assets.get_unchecked(1);
 
     //odd amount over two assets: share floors to 1500, the remainder is burned anyway
-    //duration = 1500 * 86_400_000 / 1_000_000 = 129_600 ms;
-    //new ttl = 900_000 + 129_600 = 1_029_600 ms -> 1029 seconds (floor)
+    //duration = 1500 * 86_400_000 / 1_000_000 = 129_600 ms, trimmed to 129_000 ms;
+    //new ttl = 900_000 + 129_000 = 1_029_000 ms -> 1029 seconds
     let ttls = client.track(
         &sponsor,
         &account,
@@ -237,6 +237,47 @@ fn track_dust_amount_test() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #7)")]
+fn track_sub_second_amount_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &11);
+    let asset0 = init_data.assets.get_unchecked(0);
+    //11 * 86_400_000 / 1_000_000 = 950 ms - less than a second buys no time - rejected
+    client.track(&account, &account, &Vec::from_array(&env, [asset0]), &11);
+}
+
+#[test]
+fn track_whole_seconds_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &12);
+    let asset0 = init_data.assets.get_unchecked(0);
+    //12 * 86_400_000 / 1_000_000 = 1036 ms, trimmed to a whole second
+    let ttls = client.track(&account, &account, &Vec::from_array(&env, [asset0]), &12);
+    assert_eq!(ttls, Vec::from_array(&env, [901u64]));
+    //the stored access record is aligned to whole seconds as well
+    let record = env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .get::<Address, Map<u32, u64>>(&account)
+            .unwrap()
+            .get(0)
+    });
+    assert_eq!(record, Some(901_000));
+    //the full amount is burned
+    assert_eq!(fee_token.balance(&account), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn track_excessive_amount_test() {
     let (env, client, init_data) =
         init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
@@ -336,6 +377,17 @@ fn access_entry_size(
     })
 }
 
+//read the remaining rent (in ledgers) of the access entry
+fn access_entry_ttl(
+    env: &soroban_sdk::Env,
+    client: &BeamOracleContractClient,
+    address: &Address,
+) -> u32 {
+    env.as_contract(&client.address, || {
+        env.storage().persistent().get_ttl(address)
+    })
+}
+
 #[test]
 fn track_prunes_expired_access_test() {
     let (env, client, init_data) =
@@ -380,6 +432,50 @@ fn track_prunes_expired_access_test() {
             &Vec::from_array(&env, [asset1.clone(), asset0.clone()])
         ),
         Vec::from_array(&env, [900 + 31 * day, 0])
+    );
+}
+
+#[test]
+fn track_rent_covers_retained_access_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &(401 * FEE));
+    let asset0 = init_data.assets.get_unchecked(0);
+    let asset1 = init_data.assets.get_unchecked(1);
+
+    //400 days of access for the first asset - the entry rent is capped by the maximum entry TTL
+    client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [asset0.clone()]),
+        &(400 * FEE),
+    );
+    let max_ttl = env.as_contract(&client.address, || env.storage().max_ttl());
+    assert_eq!(access_entry_ttl(&env, &client, &account), max_ttl);
+
+    //the entry gets archived while the first asset access is still active
+    let sequence = env.ledger().sequence() + max_ttl + 1;
+    env.ledger().set_sequence_number(sequence);
+    set_ledger_timestamp(&env, 900 + sequence as u64 * 5);
+
+    //one day of access for the second asset restores and renews the entry
+    client.track(
+        &account,
+        &account,
+        &Vec::from_array(&env, [asset1.clone()]),
+        &FEE,
+    );
+    //the entry rent covers the retained first asset access, not just the renewed one
+    let until = client.tracked_until(&account, &Vec::from_array(&env, [asset0, asset1]));
+    let now = env.ledger().timestamp();
+    assert!(until.get_unchecked(0) > until.get_unchecked(1));
+    assert_eq!(
+        access_entry_ttl(&env, &client, &account) as u64,
+        (until.get_unchecked(0) - now) / 5
     );
 }
 

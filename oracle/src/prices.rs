@@ -28,6 +28,19 @@ pub fn obtain_last_record_timestamp(e: &Env) -> u64 {
     last_timestamp
 }
 
+// Get timestamp of the most recent record containing the asset price
+pub fn obtain_last_asset_record_timestamp(e: &Env, asset_index: u32) -> u64 {
+    let last_timestamp = obtain_last_record_timestamp(e);
+    if last_timestamp == 0 {
+        return 0;
+    }
+    //find the most recent period with the asset price in the history mask
+    match mapping::find_last_updated_period(&get_history_map(e), asset_index) {
+        Some(period) => last_timestamp - period as u64 * settings::get_resolution(e) as u64,
+        None => 0, //no price records found
+    }
+}
+
 // Retrieve price from record for specific asset
 pub fn retrieve_asset_price_data(e: &Env, asset: u32, timestamp: u64) -> Option<PriceData> {
     //if protocol version < 2, use legacy method

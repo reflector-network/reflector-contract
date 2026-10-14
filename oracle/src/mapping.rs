@@ -76,6 +76,21 @@ pub fn check_history_updated(history_mask: &Bytes, asset_index: u32, period: u32
     encoded_byte & bit == bit
 }
 
+// Find the most recent period the asset price has been quoted for
+pub fn find_last_updated_period(history_mask: &Bytes, asset_index: u32) -> Option<u32> {
+    //locate asset mask position
+    let from = asset_index * RECORD_SIZE;
+    //byte_index counts from the record end, where the most recent periods are stored - None if the asset has no history record
+    for byte_index in 0..RECORD_SIZE {
+        let encoded_byte = history_mask.get(from + RECORD_SIZE - 1 - byte_index)?;
+        if encoded_byte > 0 {
+            //the lowest set bit corresponds to the most recent period
+            return Some(byte_index * 8 + encoded_byte.trailing_zeros());
+        }
+    }
+    None
+}
+
 // Check whether price update record contains update for given asset by its index
 pub fn check_period_updated(period_mask: &Bytes, asset_index: u32) -> bool {
     //calculate byte position and bit index to check

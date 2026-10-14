@@ -70,6 +70,27 @@ fn position_encoding_bitmask_test() {
     }
 }
 
+#[test_case(0, Some(0); "latest period")]
+#[test_case(1, Some(1); "previous period")]
+#[test_case(127, Some(127); "low half boundary")]
+#[test_case(128, Some(128); "high half boundary")]
+#[test_case(255, Some(255); "oldest tracked period")]
+#[test_case(256, None; "beyond tracked history")]
+fn find_last_updated_period_test(gap: u32, expected: Option<u32>) {
+    let e = Env::default();
+    //both assets quoted in the first round
+    let mut mask =
+        mapping::update_history_mask(Bytes::new(&e), &Vec::from_array(&e, [1i128, 1]), 1);
+    //only the second asset quoted `gap` periods later
+    if gap > 0 {
+        mask = mapping::update_history_mask(mask, &Vec::from_array(&e, [0i128, 1]), gap);
+    }
+    assert_eq!(mapping::find_last_updated_period(&mask, 0), expected);
+    assert_eq!(mapping::find_last_updated_period(&mask, 1), Some(0));
+    //asset added after the last update has no history records
+    assert_eq!(mapping::find_last_updated_period(&mask, 2), None);
+}
+
 #[test]
 fn update_record_bitmask_test() {
     let e = Env::default();

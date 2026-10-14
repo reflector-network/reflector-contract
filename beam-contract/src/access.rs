@@ -51,7 +51,8 @@ pub fn track(
     //convert the per-asset share to access time at the daily rate
     let (fee_token, fee) = load_fee_settings(e);
     let share = amount / track_assets.len() as i128;
-    let duration = share * DAY / fee; //in milliseconds
+    //trimmed to whole seconds - ledger time advances in seconds
+    let duration = share * DAY / fee / 1000 * 1000; //in milliseconds
     if duration <= 0 {
         e.panic_with_error(Error::InvalidAmount);
     }
@@ -90,7 +91,6 @@ pub fn track(
     let mut tracked = Map::new(e); //new expirations in seconds, for the event
     let mut result = Vec::new(e);
     let mut expirations = Vec::new(e); //feed expirations to bump, applied in one batch
-    let mut horizon = 0u64;
     for (index, asset) in indexes.iter().zip(track_assets.iter()) {
         //the base asset needs no access records - its access never expires
         if index == SKIP_INDEX {
@@ -105,14 +105,13 @@ pub fn track(
         expirations.push_back((index, new_ttl));
         tracked.set(asset, new_ttl / 1000);
         result.push_back(new_ttl / 1000);
-        if new_ttl > horizon {
-            horizon = new_ttl;
-        }
     }
     assets::ensure_expirations(e, &expirations);
     //skip the storage write if nothing but the base asset has been requested
     if !expirations.is_empty() {
         save_access(e, &consumer, &access);
+        //the entry rent has to cover all active access records
+        let horizon = access.values().iter().max().unwrap_or(0);
         extend_entry_ttl(e, &consumer, horizon);
     }
     e.events().publish_event(&TrackEvent {

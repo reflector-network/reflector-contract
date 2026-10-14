@@ -116,7 +116,7 @@ impl PulseOracleContract {
     //
     // # Panics
     //
-    // Panics if the asset is not supported or if retention config is malformed/missing
+    // Panics if retention config is malformed/missing
     pub fn estimate_retention_cost(e: &Env, period: u64) -> (Address, i128) {
         PriceOracleContractBase::estimate_retention_cost(e, period)
     }
