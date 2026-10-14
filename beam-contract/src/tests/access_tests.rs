@@ -107,8 +107,8 @@ fn track_dust_remainder_test() {
     let asset1 = init_data.assets.get_unchecked(1);
 
     //odd amount over two assets: share floors to 1500, the remainder is burned anyway
-    //duration = 1500 * 86_400_000 / 1_000_000 = 129_600 ms;
-    //new ttl = 900_000 + 129_600 = 1_029_600 ms -> 1029 seconds (floor)
+    //duration = 1500 * 86_400_000 / 1_000_000 = 129_600 ms, trimmed to 129_000 ms;
+    //new ttl = 900_000 + 129_000 = 1_029_000 ms -> 1029 seconds
     let ttls = client.track(
         &sponsor,
         &account,
@@ -233,6 +233,47 @@ fn track_dust_amount_test() {
         &Vec::from_array(&env, [asset0, asset1]),
         &1,
     );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn track_sub_second_amount_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &11);
+    let asset0 = init_data.assets.get_unchecked(0);
+    //11 * 86_400_000 / 1_000_000 = 950 ms - less than a second buys no time - rejected
+    client.track(&account, &account, &Vec::from_array(&env, [asset0]), &11);
+}
+
+#[test]
+fn track_whole_seconds_test() {
+    let (env, client, init_data) =
+        init_contract_with_admin!(BeamOracleContract, BeamOracleContractClient, true);
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), FEE)));
+
+    let account = Address::generate(&env);
+    fee_token.mint(&account, &12);
+    let asset0 = init_data.assets.get_unchecked(0);
+    //12 * 86_400_000 / 1_000_000 = 1036 ms, trimmed to a whole second
+    let ttls = client.track(&account, &account, &Vec::from_array(&env, [asset0]), &12);
+    assert_eq!(ttls, Vec::from_array(&env, [901u64]));
+    //the stored access record is aligned to whole seconds as well
+    let record = env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .get::<Address, Map<u32, u64>>(&account)
+            .unwrap()
+            .get(0)
+    });
+    assert_eq!(record, Some(901_000));
+    //the full amount is burned
+    assert_eq!(fee_token.balance(&account), 0);
 }
 
 #[test]

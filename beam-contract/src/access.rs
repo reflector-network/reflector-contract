@@ -51,7 +51,8 @@ pub fn track(
     //convert the per-asset share to access time at the daily rate
     let (fee_token, fee) = load_fee_settings(e);
     let share = amount / track_assets.len() as i128;
-    let duration = share * DAY / fee; //in milliseconds
+    //trimmed to whole seconds - ledger time advances in seconds
+    let duration = share * DAY / fee / 1000 * 1000; //in milliseconds
     if duration <= 0 {
         e.panic_with_error(Error::InvalidAmount);
     }
