@@ -297,6 +297,30 @@ fn extend_asset_ttl_test() {
     assert_eq!(ttl, initial_expiration + 864000);
 }
 
+#[test_case(1_000_000, 10 * 86_400, 10_000_000; "whole days")]
+#[test_case(1, 2 * 86_400 - 1, 2; "partial day")]
+#[test_case(1_000_000, 1, 12; "single second")]
+fn estimate_retention_cost_test(fee: i128, period: u64, expected: i128) {
+    let (env, client, init_data) =
+        init_contract_with_admin!(PulseOracleContract, PulseOracleContractClient, true);
+
+    let fee_token = register_token(&env, &init_data.admin);
+    client.set_fee_config(&FeeConfig::Some((fee_token.address.clone(), fee)));
+
+    //the estimated amount is rounded up
+    let (token, amount) = client.estimate_retention_cost(&period);
+    assert_eq!(token, fee_token.address);
+    assert_eq!(amount, expected);
+
+    //paying the estimated amount extends the expiration by at least the requested period
+    let sponsor = Address::generate(&env);
+    fee_token.mint(&sponsor, &amount);
+    let asset = init_data.assets.first_unchecked();
+    let initial_expiration = client.expires(&asset).unwrap();
+    let ttl = client.extend_asset_ttl(&sponsor, &asset, &amount);
+    assert!(ttl >= initial_expiration + period);
+}
+
 #[test]
 fn base_asset_expiration_test() {
     let (_, client, init_data) =

@@ -159,7 +159,12 @@ pub fn ensure_expirations(e: &Env, updates: &Vec<(u32, u64)>) {
 pub fn estimate_retention_cost(e: &Env, bump: u64) -> (Address, i128) {
     //load daily retention cost from config
     let (xrf, fee) = load_fee_settings(e);
-    let amount = bump as i128 * fee / DAY;
+    let cost = bump as i128 * fee;
+    //round up, so that the estimated amount always buys at least the requested period
+    let mut amount = cost / DAY;
+    if cost % DAY > 0 {
+        amount += 1;
+    }
     (xrf, amount)
 }
 
