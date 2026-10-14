@@ -227,20 +227,20 @@ impl PriceOracleContractBase {
     //
     // # Returns
     //
-    // Most recent price for given asset or None if asset is not supported.
+    // Most recent price for given asset or None if not supported or has no retained price records.
     // The base asset is always quoted as 1 with the most recent price update timestamp
     pub fn lastprice(e: &Env, asset: Asset) -> Option<PriceData> {
         if settings::get_base_asset(e) == asset {
             return Some(Self::base_asset_price_data(e));
         }
-        //get the last timestamp
-        let ts = prices::obtain_last_record_timestamp(&e);
+        //resolve index for the asset
+        let asset = assets::resolve_asset_index(e, &asset)?;
+        //get the timestamp of the most recent record containing the asset price
+        let ts = prices::obtain_last_asset_record_timestamp(e, asset);
         if ts == 0 {
             return None;
         }
         //get the price
-        let asset = assets::resolve_asset_index(e, &asset)?;
-        //resolve index for the asset
         prices::retrieve_asset_price_data(e, asset, ts)
     }
 
